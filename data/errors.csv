@@ -1,1 +1,27 @@
-
+code,category,name_ru,name_en,source,confidence,notes
+Err00,fault,no_fault,No fault,manual_U01.00,high,
+Err01,fault,перегрузка по току при ускорении,overcurrent during acceleration,manual_U01.00,high,
+Err02,fault,перегрузка по току при замедлении,overcurrent during deceleration,manual_U01.00,high,
+Err03,fault,перегрузка по току при постоянной скорости,overcurrent at constant speed,manual_U01.00,high,
+Err04,fault,перенапряжение при ускорении,overvoltage during acceleration,manual_U01.00,high,
+Err14,fault,перегрев модуля,module overheat,manual_U01.00,high,
+Err15,fault,сбой чтения/записи EEPROM,EEPROM read/write failure,manual_U01.00,high,see F11.11 tens
+Err16,fault,отмена автонастройки двигателя,motor auto-tuning cancelled,manual_U01.00,high,
+Err17,fault,ошибка автонастройки двигателя,motor auto-tuning error,manual_U01.00,high,
+Err18,fault,коммуникационная ошибка (овертайм),communication timeout,manual_U01.00,high,see F11.11 hundreds
+Err19,fault,потеря обратной связи ПИД,PID feedback loss,manual_U01.00,high,see F11.11 thousands
+Err20,fault,время непрерывной работы достигнуто,continuous operation time reached,manual_U01.00,high,see F11.11 ten-thousands
+Err21,fault,ошибка загрузки/передачи параметров,parameter upload error,manual_U01.00+table3.29,high,UP/DOWNLOAD card
+Err22,fault,ошибка скачивания параметров,parameter download error,manual_U01.00+table3.29,high,UP/DOWNLOAD card
+Err23,fault,ошибка торможения блока,braking block error,manual_U01.00,high,
+Err24,fault,обрыв определения температуры модуля,module temperature break,manual_U01.00+F11.11,high,
+Err25,fault,нагрузка стала равна 0,load becomes zero,manual_F11.11,medium,mentioned in protection action
+Err28,fault,несовместимость версии ПО,software version incompatibility,manual_table3.29,high,
+GAP_05_13,gap,Err05..Err13 не во фрагменте,not in excerpt,none,low,fill from full manual / device
+GAP_26_27,gap,Err26..Err27 не во фрагменте,not in excerpt,none,low,fill from full manual / device
+GAP_29_30,gap,Err29..Err30 не во фрагменте,not in excerpt,none,low,fill from full manual / device
+GAP_39_40,gap,Err39..Err40 не во фрагменте,not in excerpt,none,low,fill from full manual / device
+MBX01,modbus_exception,illegal function,illegal function,standard_modbus,low,not in excerpt; verify device behavior
+MBX02,modbus_exception,illegal data address,illegal data address,standard_modbus,low,not in excerpt; verify
+MBX03,modbus_exception,illegal data value,illegal data value,standard_modbus,low,not in excerpt; verify
+MBX04,modbus_exception,operation failed,operation failed,standard_modbus,low,not in excerpt; verify
