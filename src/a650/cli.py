@@ -3,7 +3,7 @@
 Safety model (docs/SAFETY.md):
   * reads are always allowed;
   * writes require --allow-write AND an explicit confirmation unless --yes;
-  * every write is appended to an audit log (--audit, default ./a650-audit.jsonl);
+  * every write is appended to an audit log (--audit, default /tmp/a650-audit.jsonl);
   * --simulate runs against an in-memory fake drive (no hardware needed) and
     never touches a serial port.
 """
@@ -138,6 +138,75 @@ def cmd_map(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    """Execute several verbs in ONE process against ONE transport instance.
+
+    The fake drive keeps its register bank per session *inside a single
+    process*, so multi-step flows like
+    `a650 --simulate --allow-write run "setfreq 30" "start" "status"`
+    behave like a real bus session.  All verbs share one client/transport.
+    """
+    guard = SafetyGuard()
+    if args.allow_write:
+        guard.enable_writes(set(KNOWN_WRITABLE))
+    transport = build_transport(args)
+    transport.open()
+    try:
+        client = A650Client(transport=transport, slave=args.slave, guard=guard,
+                            register_map=RegisterMap.load(), audit_path=args.audit)
+        rc = 0
+        for verb in args.verbs:
+            parts = verb.split()
+            if not parts:
+                print("run: empty verb", file=sys.stderr)
+                return 2
+            head = parts[0]
+            try:
+                if head == "read" and len(parts) in (2, 3):
+                    addr = parse_addr(parts[1])
+                    count = int(parts[2]) if len(parts) == 3 else 1
+                    values = client.read_registers(addr, count)
+                    try:
+                        reg = client.map.get(addr)
+                        print(" ".join(f"{v} ({reg.to_engineering(v)} {reg.unit})"
+                                       for v in values))
+                    except KeyError:
+                        print(" ".join(str(v) for v in values))
+                elif head == "status":
+                    st = client.status()
+                    freq = client.output_frequency_hz()
+                    print(f"state={st['state']} fault={st['fault_code']} "
+                          f"warning={st['warning_code']} output_freq={freq:.2f} Hz")
+                elif head == "map":
+                    for a in client.map.addresses():
+                        r = client.map.get(a)
+                        print(f"{r.address:#06x}  {r.name:<28} {r.access:<3} "
+                              f"scale={r.scale} {r.unit:<6} confidence={r.confidence}")
+                elif head == "start":
+                    client.write_register(0x2000, 0x0001)
+                    print("wrote 0x2000 raw=1")
+                elif head == "stop":
+                    client.write_register(0x2000, 0x0005)
+                    print("wrote 0x2000 raw=5")
+                elif head == "setfreq" and len(parts) == 2:
+                    written = client.write_engineering(0x2001, Decimal(parts[1]))
+                    print(f"wrote 0x2001 raw={written}")
+                elif head == "write" and len(parts) == 3:
+                    addr = parse_addr(parts[1])
+                    raw = int(parts[2], 0)
+                    client.write_register(addr, raw)
+                    print(f"wrote {addr:#06x} raw={raw}")
+                else:
+                    print(f"run: unknown or incomplete verb: {verb!r}", file=sys.stderr)
+                    return 2
+            except (WriteDenied, DriveError) as exc:
+                print(f"write refused/failed: {exc}", file=sys.stderr)
+                rc = max(rc, 3)
+        return rc
+    finally:
+        transport.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="a650", description=__doc__.splitlines()[0])
     ap.add_argument("--version", action="version", version=f"a650 {__version__}")
@@ -153,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--allow-write", action="store_true",
                     help="enable writes to the known-writable whitelist (0x2000, 0x2001)")
     ap.add_argument("--yes", action="store_true", help="skip interactive write confirmation")
-    ap.add_argument("--audit", default="a650-audit.jsonl", help="audit log path")
+    ap.add_argument("--audit", default="/tmp/a650-audit.jsonl", help="audit log path")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("read", help="read register(s)")
@@ -182,6 +251,14 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("map", help="list known registers with confidence flags")
     p.add_argument("--filter", default=None)
     p.set_defaults(fn=cmd_map)
+
+    p = sub.add_parser(
+        "run",
+        help="execute several verbs in ONE session (shared drive state)",
+        epilog='example: a650 --simulate --allow-write run "setfreq 30" "start" "status"',
+    )
+    p.add_argument("verbs", nargs="+", help='quoted verbs, e.g. "setfreq 30" "start" "status"')
+    p.set_defaults(fn=cmd_run)
 
     args = ap.parse_args(argv)
     try:

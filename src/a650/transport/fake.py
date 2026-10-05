@@ -72,20 +72,21 @@ class FakeTransport:
         return rtu.build_exception(slave, fc, 0x01)
 
     def _read(self, addr: int) -> int:
-        if addr == 0x3000:  # output frequency: mirror setpoint when running
+        if addr == 0x3000:  # output frequency: mirror setpoint when running fwd/rev
             cmd = self.registers.get(0x2000, 0)
-            return self.registers.get(0x2001, 0) if cmd & 0x0001 else 0
+            return self.registers.get(0x2001, 0) if cmd & 0x0003 else 0
         if addr in (0x2100, 0x2101, 0x2102, 0x2103):  # status block
             return self._status_word(addr)
         return self.registers.get(addr, 0)
 
     def _status_word(self, addr: int) -> int:
         cmd = self.registers.get(0x2000, 0)
-        running = bool(cmd & 0x0001)
-        if addr == 0x2100:   # drive state: 0 = param setting, 1 = run
-            return 1 if running else 0
+        running_fwd = bool(cmd & 0x0001)   # manual example: start forward = 0x0001
+        running_rev = bool(cmd & 0x0002)   # reverse bit is a research TODO (unverified)
+        if addr == 0x2100:                 # drive state enum: 0 param, 1 run fwd, 2 run rev
+            return 1 if running_fwd else 2 if running_rev else 0
         if addr == 0x2101:   # status bits: b0 = forward direction (simplified)
-            return 1 if running else 0
+            return 1 if running_fwd else 0
         return 0             # no faults/warnings simulated
 
     def _apply_side_effects(self) -> None:

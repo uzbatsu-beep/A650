@@ -108,3 +108,27 @@ def test_cli_whitelist_blocks_unknown_address(capsys, audit):
                  audit_path=audit)
     assert rc == 3
     assert "not in writable whitelist" in capsys.readouterr().err
+
+
+def test_cli_run_verb_shares_state(capsys, audit):
+    """One process, one transport: verbs in `run` must share drive state."""
+    assert run_cli("--allow-write", "run", "setfreq 30", "start", "status",
+                   "read 0x2001", audit_path=audit) == 0
+    out = capsys.readouterr().out
+    assert "output_freq=30.00 Hz" in out
+    assert "3000 (30.00 Hz)" in out
+    records = [json.loads(l) for l in audit.read_text().splitlines()]
+    assert len(records) == 2  # setfreq + start
+
+
+def test_cli_run_rejects_unknown_verb(capsys):
+    rc = run_cli("run", "frobnicate 42")
+    assert rc == 2
+    assert "unknown or incomplete verb" in capsys.readouterr().err
+
+
+def test_cli_run_write_denied_without_allow_write(capsys):
+    rc = run_cli("run", "start", "status")
+    assert rc == 3
+    err = capsys.readouterr().err
+    assert "not in writable whitelist" in err or "read-only" in err
