@@ -50,6 +50,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1
 
       - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/ -q
 
       - name: Build single-file executable
@@ -69,7 +71,7 @@ jobs:
           printf 'status\nsetfreq 15\nstart\nstatus\nstop\nexit\n' | \
             "$BIN" --simulate --allow-write | grep -q "output=15.00 Hz"
           # GUI must at least start and quit cleanly in offscreen mode
-          timeout 60 "$BIN" gui --simulate --auto-quit || exit 1
+          timeout 90 "$BIN" --simulate gui --auto-quit 4000 || exit 1
           echo "GUI smoke OK"
 
       - name: Upload workflow artifact
