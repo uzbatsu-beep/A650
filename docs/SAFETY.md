@@ -1,52 +1,38 @@
-# Safety Notes
+# Безопасность
 
-This software controls a variable frequency drive connected to electric motors and pumps.
+ПО управляет преобразователем, подключённым к электродвигателям и насосам. Ошибки настройки/пуска могут привести к травме, повреждению оборудования, пожару.
 
-## General rules
+## Режимы работы ПО
+- **Read‑only (по умолчанию).** Чтение параметров/мониторинга без side‑эффектов.
+- **Write (явно включается).** Требует подтверждения оператора.
+- **Control (пуск/останов).** Отдельный флаг, отдельное подтверждение, обязателен доступ к аварийному останову.
 
-- Do not enable write operations by default.
-- Require explicit confirmation before writing parameters.
-- Require explicit confirmation before start/run commands.
-- Provide emergency stop command.
-- Show current drive state before allowing control actions.
-- Log all write operations.
-- Validate all values against allowed ranges.
-- Do not use broadcast address 0x00 for writes unless intentionally designed.
+## Обязательные проверки перед записью параметра
+1. Известны адрес ведомого, скорость, формат данных (учесть конфликт А.2 vs F15.01 — см. `PROTOCOL.md` §2).
+2. Получен и показан текущий state ПЧ (рег `0x2100`/`0x2101` — адреса банка состояния требуют подтверждения; до подтверждения показывать «state unknown» и блокировать control).
+3. Сделан **diff** «было → станет» и подтверждён оператором.
+4. Для критичных групп (F00 инициализация/копирование, F08–F10 параметры двигателя, F11 защита, H00 насосы, F14 сон/пробуждение, F15 связь) — двойное подтверждение.
+5. Есть план отката (резервная копия параметров; помнить `F00.04=3/4` — создание/загрузка копии, `F00.05` — копирование на UP/DOWNLOAD).
 
-## Before first connection
+## Обязательные проверки перед пуском (запись в 0x2000)
+- Механическая нагрузка готова к пуску/останову.
+- Не активен аварийный режим / fire‑mode без явного осознания.
+- Подтверждено направление (известно только `0x0001` вперёд; реверс — TODO, не предполагать).
+- Толчковый режим (`0x0002`? — TODO) и сброс ошибки — только после подтверждения значений на приборе.
 
-Verify:
+## Чего НЕ делать
+- Не использовать широковещательный адрес `0` для записей/пусков.
+- Не писать в регистры только для чтения (0x30xx/0x31xx) — получите exception; не «обходить» это.
+- Не читать блоками > 8 регистров через 0x03 (ограничение руководства) — иначе непредсказуемый ответ.
+- Не трактовать `hypothesis`/`unverified` адреса как рабочие в продакшен‑коде.
+- Не логировать в публичные артефакты пароли (`F00.00`) и приватные сетевые топологии.
 
-- supply voltage matches drive rating;
-- motor cables are connected correctly;
-- control terminals are wired correctly;
-- RS-485 polarity A/B is correct;
-- drive firmware version is known;
-- backup of parameters is possible or not required;
-- mechanical load can safely stop/start.
+## Журналирование
+Каждая запись/команда → аудит‑лог: timestamp, адрес, функция, регистр, old→new, оператор, результат/exception. Логи не коммитить (см. `.gitignore`).
 
-## Parameter writing risks
-
-Incorrect parameters can cause:
-
-- motor overspeed;
-- pump dry running;
-- valve shock;
-- network overload;
-- brake resistor overheating;
-- unexpected restart after power loss;
-- fire-mode misbehavior.
-
-## Recommended software behavior
-
-Default mode:
-
-- read-only.
-
-Write mode must require:
-
-- user acknowledgment;
-- device fingerprint check;
-- current state check;
-- parameter diff preview;
-- rollback plan if supported.
+## First connection checklist
+- Напряжение сети соответствует паспорту ПЧ.
+- Кабели двигателя/нагрузки подключены, заземление выполнено (ток утечки может превышать 3.5 мА — см. `WIRING.md`).
+- Полярность RS‑485 A/B верна, терминальный резистор согласован с топологией.
+- Версия прошивки известна; сделано резервное копирование параметров.
+- Аварийный останов физически доступен.
