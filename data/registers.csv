@@ -1,1 +1,12 @@
-
+address_hex,address_dec,bank,name,access,data_type,scale,unit,enum_or_bits,param_ref,source,confidence,notes
+0x2000,8192,control,command_control_word,W,uint16,1,-,"0x0001=fwd_start;0x0005=stop_decel;others=TODO",,manual_A8.3_A8.4,high,"known values only; reverse/jog/reset TODO"
+0x2001,8193,control,frequency_setpoint,RW,uint16,0.01,Hz,,manual_A8.2,high,"0x0BB8=3000 -> 30.00 Hz"
+0x3000,12288,monitor,u00_00_output_frequency,R,uint16,0.01,Hz,U00.00,manual_A4.3,medium,"addr from A4.3 formula; response frame not in excerpt -> verify"
+0x3100,12544,monitor,u01_00_last_fault,R,uint16,1,err_code,U01.00,manual_A4.3,medium,"raw Err code; see errors.csv"
+0x0000,0,param_ozu,f00_00_user_password,RW,uint16,1,-,F00.00,manual_A4.3,medium,"formula-derived; not confirmed by exchange"
+0x0108,264,param_ozu,f01_08_max_frequency,RW,uint16,0.01,Hz,F01.08,manual_A4.3,medium,"range 20.00..600.00"
+0x1301,4865,param_ozu,f13_01_pid_digital_setpoint,RW,uint16,unknown,-,F13.01,manual_A4.3,low,"scale unknown"
+0x1502,5378,param_ozu,f15_02_local_address,RW,uint16,1,-,F15.02,manual_A4.3,medium,"read-back to verify formula"
+0x8000,32768,param_eeprom,f00_00_user_password_mirror,RW,uint16,1,-,F00.00,manual_A4.3,low,"EEPROM mirror; purpose/rw unconfirmed"
+0x9502,38146,param_eeprom,f15_02_local_address_mirror,RW,uint16,1,-,F15.02,manual_A4.3,low,"EEPROM mirror"
+TODO_H00,0,param_ozu,h00_group,UNKNOWN,UNKNOWN,unknown,-,H00.??,none,low,"H00 absent from A4.3 table; addressing unknown"
