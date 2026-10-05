@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "a650"
-version = "0.0.1"
+version = "0.1.0"
 description = "ONI A650 frequency inverter Modbus RTU configurator (protocol research skeleton)"
 readme = "README.md"
 requires-python = ">=3.10"
