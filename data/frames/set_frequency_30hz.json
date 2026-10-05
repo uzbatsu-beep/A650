@@ -1,0 +1,13 @@
+{
+  "name": "set_frequency_30hz",
+  "description": "Write 30.00 Hz setpoint to control register 0x2001 (slave 1)",
+  "source": "manual Appendix A.8.2",
+  "verified_request": true,
+  "verified_response": true,
+  "request":  ["0x01","0x06","0x20","0x01","0x0B","0xB8","0xD4","0x88"],
+  "response": ["0x01","0x06","0x20","0x01","0x0B","0xB8","0xD4","0x88"],
+  "expected": {
+    "slave": 1, "function": 6, "register": "0x2001",
+    "raw_value": 3000, "scaled_value": 30.0, "unit": "Hz", "scale": 0.01
+  }
+}
