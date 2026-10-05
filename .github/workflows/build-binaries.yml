@@ -1,0 +1,81 @@
+name: Build binaries
+
+# Builds single-file executables for Windows / Linux / macOS with PyInstaller
+# and attaches them to a GitHub Release when a tag v*.*.* is pushed.
+# Binaries are ALSO available from the workflow run page ("Artifacts") on any push.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: a650-windows-x86_64
+            binary: dist/a650.exe
+            asset: a650-windows-x86_64.exe
+          - os: ubuntu-latest
+            artifact: a650-linux-x86_64
+            binary: dist/a650
+            asset: a650-linux-x86_64
+          - os: macos-latest
+            artifact: a650-macos-arm64
+            binary: dist/a650
+            asset: a650-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller pyserial pytest
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Build single-file executable
+        run: pyinstaller packaging/a650.spec --distpath dist --workpath build --noconfirm
+
+      - name: Smoke test (simulate transport)
+        shell: bash
+        run: |
+          BIN="${{ matrix.binary }}"
+          "$BIN" --version
+          "$BIN" --simulate map >/dev/null
+          "$BIN" --simulate read 0x3000
+          "$BIN" --simulate --allow-write --yes run "setfreq 30" "start" "status" "stop"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+
+      - name: Publish to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.binary }}
+          name: A650 Configurator ${{ github.ref_name }}
+          body: |
+            Prototype CLI for the ONI A650 VFD (Modbus RTU).
+
+            Test without hardware: `a650 --simulate ...`
+            Real drive: `a650 --port COM3 read 0x3000` (Windows) or `--port /dev/ttyUSB0` (Linux).
+
+            Built by CI from commit ${{ github.sha }}. Unsigned prototype.
