@@ -118,3 +118,5 @@ dist_gui/
 !data/*.json
 !data/frames/*.json
 !docs/**/*.md
+# Git bundles (large, not for VCS)
+*.bundle
