@@ -150,6 +150,15 @@ def cmd_map(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_gui(args: argparse.Namespace) -> int:
+    try:
+        from .gui.app import run_gui
+    except ImportError as exc:
+        print(f"GUI needs PySide6 (pip install 'a650[gui]'): {exc}", file=sys.stderr)
+        return 6
+    return run_gui(start_simulated=args.gui_simulate, auto_quit_ms=args.auto_quit)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Execute several verbs in ONE process against ONE transport instance.
 
@@ -266,6 +275,13 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("map", help="list known registers with confidence flags")
     p.add_argument("--filter", default=None)
     p.set_defaults(fn=cmd_map)
+
+    p = sub.add_parser("gui", help="open the graphical configurator (needs PySide6)")
+    p.add_argument("--simulate", dest="gui_simulate", action="store_true",
+                   help="auto-connect to the built-in fake drive on startup")
+    p.add_argument("--auto-quit", type=int, default=0, metavar="MS", dest="auto_quit",
+                   help="close the window after MS milliseconds (CI smoke test)")
+    p.set_defaults(fn=cmd_gui)
 
     p = sub.add_parser(
         "run",

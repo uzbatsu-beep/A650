@@ -32,6 +32,16 @@ a = Analysis(
         "a650.transport.fake",
         "a650.transport.serial",   # lazy import; harmless if pyserial missing at runtime
         "serial",                  # pyserial (optional at runtime; drop for slim builds)
+        # --- GUI (PySide6). Imported lazily by `a650 gui`; PyInstaller cannot
+        # see these through the function-level import, so list them explicitly.
+        "a650.gui",
+        "a650.gui.app",
+        "a650.gui.controller",
+        "a650.gui.widgets",
+        "PySide6",
+        "PySide6.QtCore",
+        "PySide6.QtGui",
+        "PySide6.QtWidgets",
     ],
     hookspath=[],
     runtime_hooks=[],
