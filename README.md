@@ -47,3 +47,51 @@
 
 Проект находится на стадии исследования протокола и каталогизации регистров.  
 Адресная карта известна частично и требует проверки на реальном устройстве.
+
+Начальная структура:
+```
+.
+oni-a650-configurator/
+├── README.md
+├── LICENSE
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+├── SUPPORT.md
+├── .gitignore
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug_report.md
+│   │   └── feature_request.md
+│   └── PULL_REQUEST_TEMPLATE.md
+├── docs/
+│   ├── PROTOCOL.md
+│   ├── REGISTERS.md
+│   ├── PARAMETERS.md
+│   ├── ERRORS.md
+│   ├── EXAMPLES.md
+│   ├── SAFETY.md
+│   ├── WIRING.md
+│   ├── ARCHITECTURE.md
+│   ├── TESTING.md
+│   └── decisions/
+│       └── ADR-0001-use-modbus-rtu.md
+├── data/
+│   ├── registers.csv
+│   ├── parameters.csv
+│   ├── errors.csv
+│   ├── profile.schema.json
+│   └── frames/
+│       ├── read_output_frequency.json
+│       ├── set_frequency_30hz.json
+│       ├── start_forward.json
+│       ├── stop_deceleration.json
+│       └── error_read_only.json
+├── examples/
+│   ├── python/
+│   └── cli/
+└── tests/
+    ├── protocol/
+    └── fixtures/
+```
+
