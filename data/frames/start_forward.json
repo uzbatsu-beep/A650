@@ -1,0 +1,14 @@
+{
+  "name": "start_forward",
+  "description": "Forward start via control word 0x2000 = 0x0001 (slave 1)",
+  "source": "manual Appendix A.8.3",
+  "verified_request": true,
+  "verified_response": true,
+  "request":  ["0x01","0x06","0x20","0x00","0x00","0x01","0x43","0xCA"],
+  "response": ["0x01","0x06","0x20","0x00","0x00","0x01","0x43","0xCA"],
+  "expected": {
+    "slave": 1, "function": 6, "register": "0x2000",
+    "raw_value": 1, "action": "forward_start"
+  },
+  "safety": "CONTROL operation; requires explicit confirmation and e-stop availability"
+}
