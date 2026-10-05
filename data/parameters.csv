@@ -1,1 +1,54 @@
-
+code,name,group,access,data_type,default,min,max,unit,scale,ozu_addr_hex,eeprom_addr_hex,enum_values,source,confidence,notes
+F00.00,user_password,F00,RW,uint16,0,0,65535,-,unknown,0x0000,0x8000,,manual_table3.15,medium,
+F00.01,display_parameters,F00,RW,uint16,0,0,2,-,unknown,0x0001,0x8001,"0=all;1=F00+F17;2=non-default",manual_table3.15,medium,
+F00.02,parameter_protection,F00,RW,uint16,0,0,1,-,unknown,0x0002,0x8002,"0=program all;1=only F00.02",manual_table3.15,medium,
+F00.03,load_type_G_P,F00,RW,uint16,0,0,1,-,unknown,0x0003,0x8003,"0=G/HD constant torque;1=P/ND variable torque",manual_table3.15,medium,"named G/P and HD/ND in different sections"
+F00.04,init_parameters,F00,W,uint16,0,0,6,-,unknown,0x0004,0x8004,"0=noop;1=reset except motor;2=clear faults;3=save copy;4=load copy;5=reset incl motor;6=reset power dissipation",manual_table3.15,medium,"destructive; double confirm"
+F00.05,copy_parameters,F00,W,uint16,0,0,3,-,unknown,0x0005,0x8005,"0=noop;1=upload;2=download except motor;3=download incl motor",manual_table3.15,medium,requires UP/DOWNLOAD hardware
+F00.06,edit_mode,F00,RW,uint16,0,0,2,-,unknown,0x0006,0x8006,"0=keypad+RS485;1=keypad;2=RS485",manual_table3.15,medium,
+F00.08,motor1_control_mode,F00,RW,uint16,1,0,2,-,unknown,0x0008,0x8008,"0=V/f;1=SVC1;2=SVC2",manual_table3.15,medium,
+F00.12,pwm_optimization,F00,RW,uint16,0,0,123,-,unknown,0x000C,0x800C,"units=modulation mode; tens/hundreds=other",manual_table3.15,medium,bitfield-like
+F01.00,frequency_source_select,F01,RW,uint16,0,0,TODO,-,unknown,0x0100,0x8100,"1=aux;2=main+aux;3=main-aux;4=max;5=min;0/upper=TODO",manual_table3.15,medium,range truncated in excerpt
+F01.01,main_frequency_source,F01,RW,uint16,TODO,0,6,-,unknown,0x0101,0x8101,,manual_partial,low,not fully shown in excerpt
+F01.03,aux_frequency_source,F01,RW,uint16,0,0,9,-,unknown,0x0103,0x8103,"4=multistep;5=PLC;6=PID;7=pulse HI;8=AI2;...",manual_table3.15,medium,
+F01.04,aux_digital_freq,F01,RW,uint16,0.00,0.00,Fmax,Hz,0.01,0x0104,0x8104,,manual_table3.15,medium,
+F01.07,jog_frequency,F01,RW,uint16,5.00,0.00,Fmax,Hz,0.01,0x0107,0x8107,,manual_table3.15,medium,
+F01.08,max_frequency,F01,RW,uint16,50.00,20.00,600.00,Hz,0.01,0x0108,0x8108,,manual_table3.15,medium,
+F01.09,freq_upper_limit,F01,RW,uint16,50.00,Fdown,Fmax,Hz,0.01,0x0109,0x8109,,manual_table3.15,medium,
+F01.10,freq_lower_limit,F01,RW,uint16,0.00,0.00,Fup,Hz,0.01,0x010A,0x810A,,manual_table3.15,medium,
+F03.17,s_curve_end_time,F03,RW,uint16,0.0,0.0,6000.0,s,unknown,0x0311,0x8311,,manual_table3.15,medium,
+F04.15,fwd_rev_control_mode,F04,RW,uint16,0,0,3,-,unknown,0x040F,0x840F,"0=2-wire1;1=2-wire2;2=3-wire1;3=3-wire2",manual_table3.15,medium,
+F05.00,y1_function,F05,RW,uint16,1,0,42,-,unknown,0x0500,0x8500,,manual_table3.15,medium,
+F05.01,y2_ho_function,F05,RW,uint16,3,0,42,-,unknown,0x0501,0x8501,,manual_table3.15,medium,
+F05.02,relay1_function,F05,RW,uint16,2,0,42,-,unknown,0x0502,0x8502,,manual_table3.15,medium,
+F05.03,relay2_function,F05,RW,uint16,11,0,42,-,unknown,0x0503,0x8503,,manual_table3.15,medium,
+F06.00,ai1_curve_min_input,F06,RW,uint16,0.0,0.0,TODO,% ,unknown,0x0600,0x8600,,manual_table3.15,medium,
+F07.03,ao1_offset,F07,RW,uint16,TODO,TODO,TODO,% ,unknown,0x0703,0x8703,,manual_example,low,example k/b derivation in manual
+F11.14,fault_continue_freq,F11,RW,uint16,0,0,4,-,unknown,0x0B0E,0x8B0E,"0=current;1=setpoint;2=upper;3=lower;4=TODO",manual_table3.15,medium,
+F11.15,fault_reserve_freq,F11,RW,uint16,0.0,0.0,Fmax,Hz,0.01,0x0B0F,0x8B0F,,manual_table3.15,medium,
+F12.00,multistep_link0,F12,RW,uint16,0.0,-100.0,100.0,% ,unknown,0x0C00,0x8C00,,manual_table3.15,medium,
+F12.16,link0_source,F12,RW,uint16,0,0,6,-,unknown,0x0C10,0x8C10,"2=AI1;3=PID;4=pulse HI;5=AI2;6=AI3;0/1=TODO",manual_table3.15,medium,
+F13.06,pid_fb_filter_time,F13,RW,uint16,0.000,0.000,10.000,s,unknown,0x0D06,0x8D06,,manual_table3.15,medium,
+F13.08,pid_kp1,F13,RW,uint16,1.0,0.0,100.0,-,unknown,0x0D08,0x8D08,,manual_table3.15,medium,
+F13.09,pid_ti1,F13,RW,uint16,0.10,0.01,10.00,s,unknown,0x0D09,0x8D09,,manual_table3.15,medium,
+F14.10,sleep_wakeup_freq,F14,RW,uint16,TODO,TODO,TODO,Hz,0.01,0x0E0A,0x8E0A,,manual_B.3,medium,"example 20 Hz"
+F14.12,sleep_enter_freq,F14,RW,uint16,TODO,TODO,TODO,Hz,0.01,0x0E0C,0x8E0C,,manual_B.3,medium,"example 15 Hz; must be < F14.10"
+F14.14,wakeup_condition,F14,RW,uint16,0,0,1,-,unknown,0x0E0E,0x8E0E,"0=frequency;1=pressure",manual_B.3,medium,
+F14.15,sleep_condition,F14,RW,uint16,0,0,1,-,unknown,0x0E0F,0x8E0F,"0=frequency;1=pressure",manual_B.3,medium,
+F15.00,baud_rate,F15,RW,uint16,1,0,5,-,unknown,0x0F00,0x8F00,"0=4800;1=9600;2=19200;3=38400;4=57600;5=115200",manual_table3.15,medium,
+F15.01,data_format,F15,RW,uint16,0,0,3,-,unknown,0x0F01,0x8F01,"0=1-8-N-2;1=1-8-E-1;2=1-8-O-1;3=1-8-N-1",manual_table3.15,medium,"conflicts with A.2 default 1-8-N-1"
+F15.02,local_address,F15,RW,uint16,1,1,247,-,unknown,0x0F02,0x8F02,"0=broadcast",manual_table3.15,medium,"A.4 tables say 0..127"
+F15.03,comm_timeout,F15,RW,uint16,0.0,0.0,60.0,s,unknown,0x0F03,0x8F03,,manual_table3.15,medium,
+F15.04,response_delay,F15,RW,uint16,1,0,200,ms,unknown,0x0F04,0x8F04,,manual_table3.15,medium,
+F15.05,master_slave_mode,F15,RW,uint16,0,0,TODO,-,unknown,0x0F05,0x8F05,"0=slave;...",manual_table3.15,medium,upper truncated
+F16.02,key_lock,F16,RW,uint16,0,0,4,-,unknown,0x1002,0x9002,"0=none;1=full;2=except RUN/STOP;3=except STOP;4=except >>",manual_table3.15,medium,
+F16.11,speed_display_coeff,F16,RW,uint16,1.00,0.00,100.00,-,unknown,0x100B,0x900B,,manual_table3.15,medium,
+F17.00,user_code0,F17,RW,uint16,00.03,00.00,49.99,-,unknown,0x1100,0x9100,,manual_table3.15,medium,
+H00.00,pump_group_enable,H00,RW,uint16,0,0,1,-,unknown,TODO,TODO,"0=off;1=pump group mode",manual_table3.15,low,"H00 addr unknown (not in A4.3)"
+H00.01,pump_control_mode,H00,RW,uint16,0,0,3,-,unknown,TODO,TODO,"0=const master;1=var master;2=multi-var;3=multi-master",manual_table3.15,low,
+H00.11,pump_status,H00,RW,uint16,00011,0,99999,-,unknown,TODO,TODO,"digit per pump 1..5: 0=spare 1=run",manual_table3.15,low,bitfield-like
+H00.12,alternation_condition,H00,RW,uint16,0,0,2,-,unknown,TODO,TODO,"0=const order;1=first-in-first-out;2=by time",manual_table3.15,low,
+U00.00,output_frequency,U00,R,uint16,0.00,0.00,Fup,Hz,0.01,0x3000,-,,manual_table3.15,medium,
+U00.01,set_frequency,U00,R,uint16,0.00,0.00,Fmax,Hz,0.01,0x3001,-,,manual_table3.15,medium,
+U00.05,speed_display,U00,R,uint16,TODO,TODO,TODO,-,unknown,0x3005,-,,manual_partial,low,
+U01.00,last_fault,U01,R,uint16,0,0,40,err_code,unknown,0x3100,-,"Err00..Err40; see errors.csv",manual_table3.15,medium,
