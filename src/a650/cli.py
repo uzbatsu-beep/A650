@@ -220,7 +220,10 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="a650", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(
+        prog="a650", description=__doc__.splitlines()[0],
+        epilog="run without a subcommand to enter the interactive console "
+               "(e.g. `a650 --simulate`).")
     ap.add_argument("--version", action="version", version=f"a650 {__version__}")
     ap.add_argument("--port", default="/dev/ttyUSB0", help="serial port (default %(default)s)")
     ap.add_argument("--baud", type=int, default=9600)
@@ -235,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="enable writes to the known-writable whitelist (0x2000, 0x2001)")
     ap.add_argument("--yes", action="store_true", help="skip interactive write confirmation")
     ap.add_argument("--audit", default=None, help="audit log path (default: ~/.a650/audit.jsonl)")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub = ap.add_subparsers(dest="cmd", required=False)
 
     p = sub.add_parser("read", help="read register(s)")
     p.add_argument("address")
@@ -273,6 +276,15 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=cmd_run)
 
     args = ap.parse_args(argv)
+    if args.cmd is None:
+        # no subcommand -> interactive console (REPL)
+        from .repl import run_repl
+        return run_repl({
+            "port": args.port, "baud": args.baud, "parity": args.parity,
+            "slave": args.slave, "simulate": args.simulate,
+            "allow_write": args.allow_write, "yes": args.yes,
+            "session": args.session, "audit": args.audit,
+        })
     try:
         return args.fn(args)
     except DriveError as exc:

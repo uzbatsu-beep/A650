@@ -59,6 +59,8 @@ jobs:
           "$BIN" --simulate map >/dev/null
           "$BIN" --simulate read 0x3000
           "$BIN" --simulate --allow-write --yes run "setfreq 30" "start" "status" "stop"
+          printf 'status\nsetfreq 15\nstart\nstatus\nstop\nexit\n' | \
+            "$BIN" --simulate --allow-write | grep -q "output=15.00 Hz"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
