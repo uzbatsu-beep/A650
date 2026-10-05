@@ -1,0 +1,15 @@
+{
+  "name": "error_write_to_readonly",
+  "description": "HYPOTHETICAL: attempt to write 0x06 into read-only register 0x3000",
+  "source": "hypothesis; NOT present in supplied manual excerpt",
+  "verified_request": false,
+  "verified_response": false,
+  "status": "unverified",
+  "request":  null,
+  "response": null,
+  "note": "Исходный hex из ранних обсуждений не верифицирован по текущему фрагменту. Требуется захват реального exception-ответа с прибора (функция|0x80, код исключения, CRC). До верификации операция помечается experimental и не входит в golden-набор.",
+  "expected_shape": {
+    "function_echo_with_error_bit": "0x86",
+    "exception_code": "TODO verify (read-only / illegal address)"
+  }
+}
