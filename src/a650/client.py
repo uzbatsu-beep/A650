@@ -121,8 +121,11 @@ class A650Client:
         return eng
 
     def status(self) -> dict:
-        state, fault, warn = self.read_registers(0x2100, 3)
-        return {"state": state, "fault_code": fault, "warning_code": warn}
+        # Status block is 4 registers: 0x2100 state, 0x2101 status bits,
+        # 0x2102 fault, 0x2103 warning (docs/REGISTERS.md).
+        state, bits, fault, warn = self.read_registers(0x2100, 4)
+        return {"state": state, "status_bits": bits,
+                "fault_code": fault, "warning_code": warn}
 
     # -- audit -----------------------------------------------------------------
 

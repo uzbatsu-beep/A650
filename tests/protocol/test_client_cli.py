@@ -10,7 +10,16 @@ import pytest
 
 from a650.cli import main
 from a650.client import A650Client, DriveError
+from a650.transport import fake as fake_mod
 from a650.transport.fake import FakeTransport
+
+
+@pytest.fixture(autouse=True)
+def fresh_sessions():
+    """Isolate tests from the process-wide shared fake-drive state."""
+    fake_mod._SESSIONS.clear()
+    yield
+    fake_mod._SESSIONS.clear()
 
 
 @pytest.fixture()
@@ -18,8 +27,10 @@ def audit(tmp_path):
     return tmp_path / "audit.jsonl"
 
 
-def run_cli(*argv, audit_path=None):
+def run_cli(*argv, audit_path=None, session=None):
     base = ["--simulate", "--audit", str(audit_path)] if audit_path else ["--simulate"]
+    if session:
+        base += ["--session", session]
     return main(base + list(argv))
 
 

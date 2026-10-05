@@ -4,6 +4,11 @@ Implements just enough A650 behaviour to exercise the full stack without
 hardware: registers 0x2000 (command), 0x2001 (freq setpoint), 0x3000
 (output frequency mirrors setpoint when running forward/reverse).
 
+The fake drive is STATEFUL across instances sharing a session name so that
+multi-invocation CLI flows (setfreq; start; status) behave like a real drive
+on the bus. Default session "cli" persists for the process lifetime; tests
+that need isolation pass their own session and reset it explicitly.
+
 State model is intentionally simplified; command-word semantics are only
 partially known (docs/REGISTERS.md):
   * any command value with bit0 set (e.g. 0x0001) means "run forward";
@@ -14,12 +19,20 @@ from __future__ import annotations
 
 from ..modbus import rtu
 
+# Shared register banks keyed by session name (simulates a persistent drive).
+_SESSIONS: dict[str, dict[int, int]] = {}
+
+
+def _default_bank() -> dict[int, int]:
+    # 0x2100 defaults to 0 ("parameter setting mode") per manual enum.
+    return {0x2000: 0x0000, 0x2001: 0x0000, 0x2100: 0x0000}
+
 
 class FakeTransport:
-    def __init__(self, slave: int = 1) -> None:
+    def __init__(self, slave: int = 1, session: str = "cli") -> None:
         self.slave = slave
-        # 0x2100 defaults to 0 ("parameter setting mode") per manual enum.
-        self.registers: dict[int, int] = {0x2000: 0x0000, 0x2001: 0x0000, 0x2100: 0x0000}
+        self.session = session
+        self.registers: dict[int, int] = _SESSIONS.setdefault(session, _default_bank())
         self.log: list[bytes] = []          # every request frame seen
         self._open = False
 

@@ -1,1 +1,9 @@
-(empty)
+# Python build artifacts and caches
+__pycache__/
+*.pyc
+build/
+dist/
+src/*.egg-info/
+
+# PyInstaller specific (from deleted files)
+*.spec.bak

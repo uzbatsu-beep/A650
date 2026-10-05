@@ -26,7 +26,7 @@ KNOWN_WRITABLE = {0x2000, 0x2001}
 
 def build_transport(args: argparse.Namespace):
     if args.simulate:
-        return FakeTransport(slave=args.slave)
+        return FakeTransport(slave=args.slave, session=args.session)
     from .transport.serial import SerialTransport  # lazy: needs pyserial
     return SerialTransport(port=args.port, baudrate=args.baud, parity=args.parity)
 
@@ -67,8 +67,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     try:
         st = client.status()
         freq = client.output_frequency_hz()
+        # register map scale for 0x3000 is 0.01 Hz -> Decimal with 2 dp;
+        # normalise to a stable "30.00" text format for output.
         print(f"state={st['state']} fault={st['fault_code']} "
-              f"warning={st['warning_code']} output_freq={freq} Hz")
+              f"warning={st['warning_code']} output_freq={freq:.2f} Hz")
         return 0
     finally:
         client.transport.close()
@@ -145,6 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--slave", type=int, default=1)
     ap.add_argument("--simulate", action="store_true",
                     help="use built-in fake drive (no hardware, no pyserial)")
+    ap.add_argument("--session", default="cli",
+                    help="fake-drive session name; same session shares state "
+                         "across CLI invocations within one process (default %(default)s)")
     ap.add_argument("--allow-write", action="store_true",
                     help="enable writes to the known-writable whitelist (0x2000, 0x2001)")
     ap.add_argument("--yes", action="store_true", help="skip interactive write confirmation")

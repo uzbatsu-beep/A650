@@ -16,7 +16,12 @@ REPO_DATA = REPO_ROOT / "data"
 # Data shipped inside the package (used when running as a frozen binary or an
 # installed wheel, where the repo-level data/ directory is not present).
 import sys as _sys
-PKG_DATA = Path(getattr(_sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "data"
+_MEIPASS = getattr(_sys, "_MEIPASS", None)
+if _MEIPASS:
+    # Frozen single-file build: datas are unpacked to <_MEIPASS>/a650/data.
+    PKG_DATA = Path(_MEIPASS) / "a650" / "data"
+else:
+    PKG_DATA = Path(__file__).resolve().parent.parent / "data"
 
 
 def default_data_path(name: str) -> Path:
