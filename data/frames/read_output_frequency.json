@@ -1,0 +1,10 @@
+{
+  "name": "read_output_frequency",
+  "description": "Read U00.00 output frequency (reg 0x3000)",
+  "slave": 1,
+  "request": "01 03 30 00 00 01 8B 0A",
+  "valid_response": "01 03 02 13 88 B5 12",
+  "exception_response": null,
+  "verification": "manual_example_crc_verified",
+  "notes": "Response decodes to 5000 raw = 50.00 Hz at scale 0.01."
+}

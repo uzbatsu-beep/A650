@@ -1,0 +1,10 @@
+{
+  "name": "start_forward",
+  "description": "Write command word 0x2000 = 0x0001 (forward run)",
+  "slave": 1,
+  "request": "01 06 20 00 00 01 43 CA",
+  "valid_response": "01 06 20 00 00 01 43 CA",
+  "exception_response": null,
+  "verification": "computed_crc_from_manual_semantics",
+  "notes": "Command semantics from manual; frame bytes reconstructed (EXAMPLES.md truncated)."
+}

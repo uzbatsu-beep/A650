@@ -1,0 +1,25 @@
+code,name,category,fault_register_value,description,action,source,confidence,notes
+14,Err14,module_overheat,,,,Manual U01,high,IGBT module overheat.
+15,Err15,eeprom_rw_failure,,,,Manual U01,high,EEPROM read/write failure.
+16,Err16,auto_tune_cancelled,,,,Manual U01,high,Motor auto-tuning cancelled.
+17,Err17,auto_tune_error,,,,Manual U01,high,Motor auto-tuning error.
+18,Err18,comm_timeout,,,,Manual U01,high,Communication timeout (relevant for configurator: link loss).
+19,Err19,pid_feedback_loss,,,,Manual U01,high,PID feedback loss.
+20,Err20,continuous_time_reached,,,,Manual U01,high,Continuous operation time reached.
+21,Err21,param_upload_error,,,,Manual U01,high,Parameter upload error.
+22,Err22,param_download_error,,,,Manual U01,high,Parameter download error.
+23,Err23,braking_block_error,,,,Manual U01,high,Braking block error.
+24,Err24,module_temp_break,,,,Manual U01,medium,Module temperature break detection (sensor broken?).
+25,Err25,load_zero,,,,Manual U01,high,Load becomes zero.
+26,Err26,ripple_current_limit,,,,Manual U01,high,Ripple current limit error.
+27,Err27,softstart_relay_open,,,,Manual U01,high,Soft-start relay disconnected.
+28,Err28,fw_version_mismatch,,,,Manual U01,high,Software version compatibility error.
+29,Err29,reserved,,,,Manual U01,low,Reserved in manual.
+30,Err30,instantaneous_overvoltage,,,,Manual U01,high,Instantaneous overvoltage.
+39,Err39,motor_ptc_overtemp,,,,Manual U01,high,Motor PTC temperature too high.
+40,Err40,tuning_timeout,,,,Manual U01,high,Tuning operation timeout.
+EXC01,IllegalFunction,modbus_exception,,,,Manual ch.15,high,Modbus exception 0x01.
+EXC02,IllegalDataAddress,modbus_exception,,,,Manual ch.15,high,Modbus exception 0x02.
+EXC03,IllegalDataValue,modbus_exception,,,,Manual ch.15,high,Modbus exception 0x03.
+EXC04,OperationNotExecuted,modbus_exception,,,,Manual ch.15,high,Modbus exception 0x04.
+EXC11,ReadOnlyParameter,modbus_exception_detailed,,0x11,,Manual note,low,Mentioned as detailed error code for read-only parameter; exposure mechanism UNKNOWN.

@@ -1,0 +1,10 @@
+{
+  "name": "stop_deceleration",
+  "description": "Write command word 0x2000 = 0x0005 (stop with deceleration)",
+  "slave": 1,
+  "request": "01 06 20 00 00 05 42 09",
+  "valid_response": "01 06 20 00 00 05 42 09",
+  "exception_response": null,
+  "verification": "computed_crc_from_manual_semantics",
+  "notes": ""
+}

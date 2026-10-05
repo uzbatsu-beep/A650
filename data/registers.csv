@@ -1,0 +1,9 @@
+address_hex,address_dec,name,access,data_type,scale,unit,min_raw,max_raw,default_raw,enum_or_bits,source,confidence,verified_on_device,notes
+0x2000,8192,Command/control word,RW,uint16,1,-,,,,bits: b0=run_forward(known); stop value 0x0005 (decel stop); reverse/jog/reset values UNKNOWN,Manual example,medium,no,"Known raw values: 0x0001 forward start, 0x0005 stop with deceleration. Full bit map TBD on bench."
+0x2001,8193,Frequency setpoint,RW,uint16,0.01,Hz,0,10000,,,Manual example,high,no,3000 = 30.00 Hz; max depends on F00 motor config.
+0x2005,8197,AO output value,R?,uint16,0.1,%,0,1000,,,Manual appendix,low,no,Access direction unconfirmed (read vs write).
+0x2100,8448,Drive state/function,R,enum16,1,-,,,,,Manual appendix,high,no,0=param setting; 1=start slave; 2=jog; 3=learning; 4=park slave; 5=park jog; 6=fault
+0x2101,8449,Status bits,R,bitfield16,1,-,,,,,Manual appendix,high,no,Bits for sign/direction/command source/password/function group; exact layout TBD.
+0x2102,8450,Current fault code,R,uint16,1,Err code,,,,,Manual appendix,high,no,Numeric mapping to Err names TBD (see data/errors.csv).
+0x2103,8451,Current warning code,R,uint16,1,Warn code,,,,,Manual appendix,high,no,Warning list incomplete.
+0x3000,12288,U00.00 output frequency,R,uint16,0.01,Hz,0,65535,,,Manual example,high,no,Example CRC-verified frame in docs/EXAMPLES.md. Suggests U-group monitors are directly addressable at 0x3000+index.

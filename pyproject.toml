@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "a650"
+version = "0.0.1"
+description = "ONI A650 frequency inverter Modbus RTU configurator (protocol research skeleton)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "A650 Configurator contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+serial = ["pyserial>=3.5"]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+# Broken third-party plugin in some environments (libtmux ships a pytest plugin
+# that is incompatible with pytest 9: "Marks cannot be applied to fixtures").
+addopts = "-p no:libtmux"
