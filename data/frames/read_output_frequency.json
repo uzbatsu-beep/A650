@@ -1,0 +1,14 @@
+{
+  "name": "read_output_frequency_u00_00",
+  "description": "Read U00.00 output frequency from monitor register 0x3000 (slave 1)",
+  "source": "request derived from manual A.4.3 (U00 -> 0x30xx) + 0x03 format; CRC hand-verified",
+  "verified_request": true,
+  "verified_response": false,
+  "request":  ["0x01","0x03","0x30","0x00","0x00","0x01","0x8B","0x0A"],
+  "response": null,
+  "response_note": "Ответ НЕ подтверждён фрагментом руководства. Захватить с прибора. Ожидаемый формат: 01 03 02 <hi> <lo> <crc_lo> <crc_hi>; при 50.00 Гц данные = 13 88. Не использовать как golden до верификации CRC ответа.",
+  "expected_if_verified": {
+    "slave": 1, "function": 3, "register": "0x3000",
+    "raw_value_example": 5000, "scaled_value_example": 50.0, "unit": "Hz", "scale": 0.01
+  }
+}
