@@ -3,7 +3,7 @@
 Safety model (docs/SAFETY.md):
   * reads are always allowed;
   * writes require --allow-write AND an explicit confirmation unless --yes;
-  * every write is appended to an audit log (--audit, default /tmp/a650-audit.jsonl);
+  * every write is appended to an audit log (--audit, default ~/.a650/audit.jsonl);
   * --simulate runs against an in-memory fake drive (no hardware needed) and
     never touches a serial port.
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 from decimal import Decimal
+from pathlib import Path
 
 from .a650lib.register_map import RegisterMap
 from .a650lib.safety import SafetyGuard, WriteDenied
@@ -35,6 +36,17 @@ def parse_addr(text: str) -> int:
     return int(text, 0)  # accepts 0x3000 and 12288
 
 
+def default_audit_path() -> Path:
+    """Cross-platform audit log location (Windows has no /tmp)."""
+    return Path.home() / ".a650" / "audit.jsonl"
+
+
+def resolve_audit_path(args: argparse.Namespace) -> Path:
+    p = Path(args.audit) if args.audit else default_audit_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def make_client(args: argparse.Namespace) -> A650Client:
     guard = SafetyGuard()
     if args.allow_write:
@@ -43,7 +55,7 @@ def make_client(args: argparse.Namespace) -> A650Client:
     transport.open()
     return A650Client(transport=transport, slave=args.slave, guard=guard,
                       register_map=RegisterMap.load(),
-                      audit_path=args.audit)
+                      audit_path=resolve_audit_path(args))
 
 
 def cmd_read(args: argparse.Namespace) -> int:
@@ -153,7 +165,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     transport.open()
     try:
         client = A650Client(transport=transport, slave=args.slave, guard=guard,
-                            register_map=RegisterMap.load(), audit_path=args.audit)
+                            register_map=RegisterMap.load(), audit_path=resolve_audit_path(args))
         rc = 0
         for verb in args.verbs:
             parts = verb.split()
@@ -222,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--allow-write", action="store_true",
                     help="enable writes to the known-writable whitelist (0x2000, 0x2001)")
     ap.add_argument("--yes", action="store_true", help="skip interactive write confirmation")
-    ap.add_argument("--audit", default="/tmp/a650-audit.jsonl", help="audit log path")
+    ap.add_argument("--audit", default=None, help="audit log path (default: ~/.a650/audit.jsonl)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("read", help="read register(s)")
