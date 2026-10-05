@@ -1,14 +1,45 @@
-# ONI A650 Known Modbus Registers
+# Адресная карта ONI A650 (readable)
 
-Status: partial. Verified against manual examples only.
+Машиночитаемая версия: [`../data/registers.csv`](../data/registers.csv). Правило: код читает CSV, человек читает этот файл; при расхождении прав CSV + колонка `source`/`confidence`.
 
-| Address | Hex | Name | Access | Type | Scale | Unit | Source | Confidence |
-|---|---|---|---|---|---|---|---|---|
-| 0x2000 | 8192 | Command/control word | RW | uint16 | raw | - | Manual example | Medium |
-| 0x2001 | 8193 | Frequency setpoint | RW | uint16 | 0.01 | Hz | Manual example | High |
-| 0x2005 | 8197 | AO output | R/W? | uint16 | 0.1 | % | Manual appendix | Medium |
-| 0x2100 | 8448 | Drive state/function | R | enum16 | raw | - | Manual appendix | High |
-| 0x2101 | 8449 | Status bits | R | bitfield16 | raw | - | Manual appendix | High |
-| 0x2102 | 8450 | Current fault | R | uint16 | raw | Err code | Manual appendix | High |
-| 0x2103 | 8451 | Current warning | R | uint16 | raw | Warn code | Manual appendix | High |
-| 0x3000 | 12288 | U00.00 output frequency | R | uint16 | 0.01 | Hz | Manual example | High |
+Статус: **частично**. Формула банка параметров выведена из Приложения А.4.3, но **не подтверждена** примером Modbus‑обмена параметром (см. `PROTOCOL.md` §6) — помечено `medium`.
+
+## Банк управления (0x20xx)
+
+| Hex | Dec | Имя | Доступ | Тип | Масштаб | Ед. | Значения | Источник | Conf |
+|---|---:|---|---|---|---|---|---|---|---|
+| 0x2000 | 8192 | command_control_word | W | uint16 | raw | — | 0x0001=fwd_start; 0x0005=stop_decel; others=TODO | А.8.3/А.8.4 | high |
+| 0x2001 | 8193 | frequency_setpoint | RW | uint16 | 0.01 | Hz | 0x0BB8=3000→30.00 | А.8.2 | high |
+
+## Банк мониторинга (0x30xx / 0x31xx, только чтение)
+
+| Hex | Dec | Имя | Параметр | Масштаб | Ед. | Источник | Conf |
+|---|---:|---|---|---|---|---|---|
+| 0x3000 | 12288 | u00_00_output_frequency | U00.00 | 0.01 | Hz | А.4.3 | medium |
+| 0x3100 | 12544 | u01_00_last_fault | U01.00 | raw | Err‑код | А.4.3 | medium |
+
+## Банк параметров (формула ОЗУ)
+
+`addr_ozu = (group_index << 8) | param_index`, где `group_index`: F00=0x00 … F31=0x1F, U00=0x30, U01=0x31.  
+EEPROM‑зеркало F‑групп: старший байт `0x80 | group_index`.
+
+Примеры адресов (для проверки на приборе):
+
+| Параметр | ОЗУ | EEPROM | Заметка |
+|---|---|---|---|
+| F00.00 | 0x0000 | 0x8000 | пароль |
+| F01.08 | 0x0108 | 0x8108 | макс. частота |
+| F13.01 | 0x1301 | 0x9301 | цифровая уставка ПИД |
+| F15.02 | 0x1502 | 0x9502 | локальный адрес |
+| U00.00 | 0x3000 | — | только чтение |
+| U01.00 | 0x3100 | — | только чтение |
+| H00.?? | TODO | TODO | нет в А.4.3 |
+
+> Все адреса банка параметров — **medium/hypothesis** до подтверждения обменом. Полная таблица параметров и их метаданные — в [`../data/parameters.csv`](../data/parameters.csv) и [`PARAMETERS.md`](PARAMETERS.md).
+
+## Как добавлять регистр
+
+1. Строка в `data/registers.csv` (обязательно `source` и `confidence`).
+2. Строка здесь, если она меняет читаемую картину.
+3. Пример кадра в `EXAMPLES.md` + фикстура в `data/frames/`.
+4. Запись в `CHANGELOG.md`.
