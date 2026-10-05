@@ -42,8 +42,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e ".[gui]"
           pip install pyinstaller pyserial pytest
+
+      - name: Install Linux system libs (Qt headless)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1
 
       - name: Run tests
         run: python -m pytest tests/ -q
@@ -53,12 +57,20 @@ jobs:
 
       - name: Smoke test (simulate transport)
         shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
+          export QT_QPA_PLATFORM=offscreen
           BIN="${{ matrix.binary }}"
           "$BIN" --version
           "$BIN" --simulate map >/dev/null
           "$BIN" --simulate read 0x3000
           "$BIN" --simulate --allow-write --yes run "setfreq 30" "start" "status" "stop"
+          printf 'status\nsetfreq 15\nstart\nstatus\nstop\nexit\n' | \
+            "$BIN" --simulate --allow-write | grep -q "output=15.00 Hz"
+          # GUI must at least start and quit cleanly in offscreen mode
+          timeout 60 "$BIN" gui --simulate --auto-quit || exit 1
+          echo "GUI smoke OK"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

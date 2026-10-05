@@ -17,8 +17,9 @@ a650 = "a650.cli:main"
 
 [project.optional-dependencies]
 serial = ["pyserial>=3.5"]
+gui = ["PySide6>=6.6"]
 dev = ["pytest>=7"]
-build = ["pyinstaller>=6.0"]
+build = ["pyinstaller>=6.0", "pyserial>=3.5", "PySide6>=6.6"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -66,6 +66,11 @@ class RegisterMap:
         self._by_address = registers
 
     @classmethod
+    def empty(cls) -> "RegisterMap":
+        """A map with no entries (used by GUI/tests that tolerate missing data)."""
+        return cls({})
+
+    @classmethod
     def load(cls, path: Path | str | None = None) -> "RegisterMap":
         p = Path(path) if path else default_data_path("registers.csv")
         regs: dict[int, RegisterDef] = {}
