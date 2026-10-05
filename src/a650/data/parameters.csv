@@ -1,0 +1,26 @@
+param_id,group,name,modbus_address,address_confidence,access,data_type,scale,unit,min_value,max_value,default_value,enum_values,source,confidence,verified_on_device,notes
+F15.00,F15,Baud rate,,unmapped,RW,uint16,1,-,,,1,0=4800;1=9600;2=19200;3=38400;4=57600;5=115200,Manual ch.15,high,no,Default 9600.
+F15.01,F15,Data format,,unmapped,RW,uint16,1,-,,,?,0=1-8-N-2;1=1-8-E-1;2=1-8-O-1;3=1-8-N-1,Manual ch.15 + App.A,low,no,CONFLICT: App.A says default 1-8-N-1 but F15.01 default 0 is described as 1-8-N-2. Verify on device.
+F15.02,F15,Local Modbus address,,unmapped,RW,uint16,1,-,1,247,1,,Manual ch.15,high,no,0 reserved for broadcast.
+F15.05,F15,Master/slave mode,,unmapped,RW,uint16,1,-,,,,,Manual ch.15,medium,no,
+F15.06,F15,Data source to master,,unmapped,RW,uint16,1,-,,,,,Manual ch.15,medium,no,
+F01.00,F01,Frequency command selection,,unmapped,RW,uint16,1,-,,,,,Manual ch.1,medium,no,
+F01.01,F01,Main frequency source,,unmapped,RW,uint16,1,-,,,,,Manual ch.1,medium,no,"HYPOTHESIS: if flat map holds, address would be 0x0001 - UNVERIFIED."
+F01.03,F01,Auxiliary frequency source,,unmapped,RW,uint16,1,-,,,,,Manual ch.1,medium,no,
+F13.00,F13,PID setpoint source,,unmapped,RW,uint16,1,-,,,,,Manual ch.13,medium,no,
+F13.01,F13,Digital PID setpoint,,unmapped,RW,uint16,0.1,%,0,1000,,,Manual ch.13,medium,no,
+F13.02,F13,PID feedback source,,unmapped,RW,uint16,1,-,,,,,Manual ch.13,medium,no,
+F13.03,F13,PID feedback range,,unmapped,RW,uint16,1,-,,,,,Manual ch.13,medium,no,Used in PID display scaling: value% x F13.03.
+F13.04,F13,PID action direction,,unmapped,RW,uint16,1,-,,,,,Manual ch.13,medium,no,
+F13.05,F13,PID filter time,,unmapped,RW,uint16,1,s,,,,,Manual ch.13,medium,no,
+F11.11,F11,Protection action 2,,unmapped,RW,uint16,1,-,,,,,Manual ch.11,medium,no,
+F11.12,F11,Protection action 3,,unmapped,RW,uint16,1,-,,,,,Manual ch.11,medium,no,
+F11.18,F11,Overload threshold 1,,unmapped,RW,uint16,0.1,%,,,,,Manual ch.11,medium,no,
+F11.19,F11,Overload threshold 2,,unmapped,RW,uint16,0.1,%,,,,,Manual ch.11,medium,no,
+H00.13,H00,Pump alternation time,,unmapped,RW,uint16,1,min,,,,,Manual H00,medium,no,
+H00.15,H00,Cleaning function,,unmapped,RW,uint16,1,-,,,,,Manual H00,medium,no,
+H00.43,H00,Fire mode loop,,unmapped,RW,uint16,1,-,,,,,Manual H00,medium,no,
+H00.44,H00,Fire mode initial value,,unmapped,RW,uint16,1,-,,,,,Manual H00,medium,no,
+H00.45,H00,Fire mode fault handling,,unmapped,RW,uint16,1,-,,,,,Manual H00,medium,no,
+H00.47,H00,Fire bypass delay,,unmapped,RW,uint16,1,s,,,,,Manual H00,medium,no,
+U00.00,U00,Output frequency (monitor),0x3000,direct_read,R,uint16,0.01,Hz,,,,,Manual example,high,no,CRC-verified read frame. Only parameter with CONFIRMED register address.

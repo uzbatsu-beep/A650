@@ -1,0 +1,10 @@
+{
+  "name": "set_frequency_30hz",
+  "description": "Write 0x2001 = 3000 (30.00 Hz)",
+  "slave": 1,
+  "request": "01 06 20 01 0B B8 D4 88",
+  "valid_response": "01 06 20 01 0B B8 D4 88",
+  "exception_response": "01 86 03 02 61",
+  "verification": "computed_crc_from_manual_semantics",
+  "notes": "Echo response per Modbus FC06. Exception example: value out of range."
+}

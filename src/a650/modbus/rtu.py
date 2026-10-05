@@ -102,3 +102,37 @@ def parse_response(frame: bytes, expected_slave: int | None = None) -> ReadRegis
         value = int.from_bytes(frame[4:6], "big")
         return ReadRegistersResponse(values=(address, value))
     raise ValueError(f"unsupported function code {fc:#02x}")
+
+
+# --- frame builders (used by client and fake drive) -------------------------
+
+def build_read_response(slave: int, values: list[int] | tuple[int, ...]) -> bytes:
+    byte_count = 2 * len(values)
+    body = bytes([slave, FC_READ, byte_count]) + b"".join(
+        v.to_bytes(2, "big") for v in values
+    )
+    return append_crc(body)
+
+
+def build_write_echo(slave: int, address: int, value: int) -> bytes:
+    return WriteRegisterRequest(slave=slave, address=address, value=value).to_bytes()
+
+
+def build_exception(slave: int, function: int, code: int) -> bytes:
+    return append_crc(bytes([slave, function | EXC_BIT, code]))
+
+
+def crc_ok(frame: bytes) -> bool:
+    """Alias kept for readability in transport implementations."""
+    return check_crc(frame)
+
+
+def expected_response_len(request: bytes) -> int:
+    """Compute the exact RTU response length for a given request frame."""
+    fc = request[1]
+    if fc == FC_READ:
+        count = int.from_bytes(request[4:6], "big")
+        return 3 + 2 * count + 2          # slave+fc+bc + data + crc
+    if fc == FC_WRITE:
+        return 8                           # echo of the 8-byte request
+    return 5                               # exception: slave+fc+code+crc

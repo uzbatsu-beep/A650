@@ -12,12 +12,19 @@ license = "MIT"
 authors = [{ name = "A650 Configurator contributors" }]
 dependencies = []
 
+[project.scripts]
+a650 = "a650.cli:main"
+
 [project.optional-dependencies]
 serial = ["pyserial>=3.5"]
 dev = ["pytest>=7"]
+build = ["pyinstaller>=6.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"a650" = ["data/*.csv", "data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

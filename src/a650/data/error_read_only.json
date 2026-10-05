@@ -1,0 +1,10 @@
+{
+  "name": "error_read_only",
+  "description": "Attempt write to a read-only register -> exception",
+  "slave": 1,
+  "request": "01 06 30 00 00 00 86 CA",
+  "valid_response": null,
+  "exception_response": "01 86 02 C3 A1",
+  "verification": "hypothesis",
+  "notes": "HYPOTHESIS: exact exception code for read-only writes is unknown (manual mentions detailed 0x11). Raw 0x86 0x02 used as placeholder standard IllegalDataAddress."
+}

@@ -10,7 +10,22 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
-REPO_DATA = Path(__file__).resolve().parents[3] / "data"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_DATA = REPO_ROOT / "data"
+
+# Data shipped inside the package (used when running as a frozen binary or an
+# installed wheel, where the repo-level data/ directory is not present).
+import sys as _sys
+PKG_DATA = Path(getattr(_sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "data"
+
+
+def default_data_path(name: str) -> Path:
+    """Resolve a bundled data file: repo data/ first, then packaged copy."""
+    for base in (REPO_DATA, PKG_DATA):
+        p = base / name
+        if p.exists():
+            return p
+    raise FileNotFoundError(f"{name} not found in {REPO_DATA} or {PKG_DATA}")
 
 
 @dataclass(frozen=True)
@@ -47,7 +62,7 @@ class RegisterMap:
 
     @classmethod
     def load(cls, path: Path | str | None = None) -> "RegisterMap":
-        p = Path(path) if path else REPO_DATA / "registers.csv"
+        p = Path(path) if path else default_data_path("registers.csv")
         regs: dict[int, RegisterDef] = {}
         with p.open(newline="", encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
