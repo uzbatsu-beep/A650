@@ -1,9 +1,14 @@
 
 [build]
 pyinstaller>=6.0
+pyserial>=3.5
+PySide6>=6.6
 
 [dev]
 pytest>=7
+
+[gui]
+PySide6>=6.6
 
 [serial]
 pyserial>=3.5

@@ -22,6 +22,10 @@ src/a650/data/registers.csv
 src/a650/data/set_frequency_30hz.json
 src/a650/data/start_forward.json
 src/a650/data/stop_deceleration.json
+src/a650/gui/__init__.py
+src/a650/gui/app.py
+src/a650/gui/controller.py
+src/a650/gui/widgets.py
 src/a650/modbus/__init__.py
 src/a650/modbus/crc.py
 src/a650/modbus/rtu.py
