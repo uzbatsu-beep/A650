@@ -90,12 +90,27 @@ class OfflineProject:
         return bool(self._redo)
 
     def set(self, code, value):
-        value = validate(code, value)
-        if self.values.get(code) == value:
+        self.apply_changes({code: validate(code, value)})
+
+    def apply_changes(self, changes):
+        """Validate a whole local change set before changing anything.
+
+        None removes a local value; it never means writing zero to a device.
+        A batch is one undo step, including removal of unknown loaded enums.
+        """
+        updated = self.values.copy()
+        for code, value in changes.items():
+            if code not in ENUMS and code not in DECIMALS:
+                raise ValueError('Для параметра нет проверенного редактора')
+            if value is None:
+                updated.pop(code, None)
+            else:
+                updated[code] = validate(code, value)
+        if updated == self.values:
             return
         self._undo.append(self.values.copy())
         self._redo.clear()
-        self.values[code] = value
+        self.values = updated
 
     def undo(self):
         if self._undo:

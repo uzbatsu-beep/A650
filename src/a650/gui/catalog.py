@@ -2,14 +2,14 @@
 from pathlib import Path
 from datetime import datetime
 import time
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer, QItemSelectionModel
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QPlainTextEdit, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget, QSplitter, QFrame, QPushButton,
                                QFileDialog, QMessageBox, QCheckBox)
 from ..a650lib.catalog import load_catalog, search_catalog
-from ..a650lib.offline_project import OfflineProject, ENUMS, DECIMALS, UNITS
+from ..a650lib.offline_project import OfflineProject, ENUMS, DECIMALS, UNITS, validate
 from .project_delegate import ProjectDelegate
 
 
@@ -96,11 +96,22 @@ class CatalogView(QWidget):
         warning.setWordWrap(True)
         warning.setObjectName("notice")
         layout.addWidget(warning)
+        selection_actions = QHBoxLayout()
+        self.take_sample_button = QPushButton("Взять выбранные из образца")
+        self.remove_value_button = QPushButton("Убрать локальные значения")
+        self.selection_status = QLabel("Выберите строки · Ctrl/Shift для нескольких")
+        self.selection_status.setObjectName("muted")
+        selection_actions.addWidget(self.take_sample_button)
+        selection_actions.addWidget(self.remove_value_button)
+        selection_actions.addWidget(self.selection_status, 1)
+        layout.addLayout(selection_actions)
+        self.take_sample_button.clicked.connect(self._take_sample)
+        self.remove_value_button.clicked.connect(self._remove_values)
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(['Код', 'Название', 'Образец', 'Проверка', 'Проект', 'Сравнение', 'ПЧ · симулятор'])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
         self.table.setItemDelegateForColumn(4, ProjectDelegate(self))
 
@@ -138,6 +149,7 @@ class CatalogView(QWidget):
         self.editable_only.toggled.connect(self._render)
         self.differences_only.toggled.connect(self._render)
         self.table.itemSelectionChanged.connect(self._show_detail)
+        self.table.itemSelectionChanged.connect(self._update_selection_actions)
         self._load(self.model.currentText())
         self._freshness_timer = QTimer(self)
         self._freshness_timer.setInterval(1000)
@@ -300,11 +312,10 @@ class CatalogView(QWidget):
     def _render(self, *_):
         self.table.setColumnHidden(2, self.comparison is None)
         self.table.setColumnHidden(5, self.comparison is None)
-        selected = self.table.currentRow()
-        selected_key = None
-        if 0 <= selected < len(self.visible_entries):
-            entry = self.visible_entries[selected]
-            selected_key = (entry.code, entry.source_location)
+        selected_keys = {(self.visible_entries[index.row()].code,
+                          self.visible_entries[index.row()].source_location)
+                         for index in self.table.selectionModel().selectedRows()
+                         if index.row() < len(self.visible_entries)}
         self._rendering = True
         self.visible_entries = search_catalog(self.entries, self.search.text(), self.group.currentText())
         if self.editable_only.isChecked():
@@ -315,6 +326,10 @@ class CatalogView(QWidget):
         if self.differences_only.isChecked() and self.comparison is not None:
             self.visible_entries = tuple(e for e in self.visible_entries
                 if project.values.get(e.code) != self.comparison.values.get(e.code))
+        self.table.setColumnHidden(3, not any(e.conflict or e.duplicate for e in self.visible_entries))
+        self.table.setColumnHidden(6, not self._simulated_connection and not self.observed)
+        self.table.clearSelection()
+        self.table.setCurrentCell(-1, -1)
         self.table.setRowCount(len(self.visible_entries))
         for row, entry in enumerate(self.visible_entries):
             status = 'Конфликт' if entry.conflict else 'Дубликат' if entry.duplicate else 'Не проверено на ПЧ'
@@ -365,12 +380,76 @@ class CatalogView(QWidget):
                 self.table.setItem(row, col, item)
         self._rendering = False
         self.detail.clear()
-        if selected_key:
-            for row, entry in enumerate(self.visible_entries):
-                if (entry.code, entry.source_location) == selected_key:
-                    self.table.selectRow(row)
-                    self._show_detail()
-                    break
+        first = True
+        for row, entry in enumerate(self.visible_entries):
+            if (entry.code, entry.source_location) in selected_keys:
+                index = self.table.model().index(row, 0)
+                self.table.selectionModel().select(index,
+                    QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+                if first:
+                    self.table.selectionModel().setCurrentIndex(index, QItemSelectionModel.SelectionFlag.NoUpdate)
+                    first = False
+        self._show_detail()
+        self._update_selection_actions()
+
+    def _selected_entries(self):
+        return [self.visible_entries[index.row()]
+                for index in self.table.selectionModel().selectedRows()
+                if 0 <= index.row() < len(self.visible_entries)]
+
+    def _selection_changes(self, take_sample):
+        selected = self._selected_entries()
+        if not selected:
+            raise ValueError('Выберите строки параметров')
+        if take_sample and (self.comparison is None or self.comparison.model != self.model.currentText()):
+            raise ValueError('Откройте образец той же модели')
+        changes = {}
+        project = self.projects[self.model.currentText()]
+        for entry in selected:
+            if entry.conflict or entry.duplicate or entry.code not in ENUMS and entry.code not in DECIMALS:
+                raise ValueError(f'{entry.code}: конфликт или нет проверенного редактора')
+            if take_sample:
+                if entry.code not in self.comparison.values:
+                    raise ValueError(f'{entry.code}: значение отсутствует в образце')
+                changes[entry.code] = validate(entry.code, self.comparison.values[entry.code])
+            elif entry.code in project.values:
+                changes[entry.code] = None
+        return changes
+
+    def _update_selection_actions(self):
+        if self._rendering:
+            return
+        selected = self._selected_entries()
+        self.selection_status.setText(f'Выбрано: {len(selected)} · операции только с проектом' if selected
+                                      else 'Выберите строки · Ctrl/Shift для нескольких')
+        for button, take_sample in ((self.take_sample_button, True), (self.remove_value_button, False)):
+            try:
+                changes = self._selection_changes(take_sample)
+                project = self.projects[self.model.currentText()]
+                effective = any((code in project.values if value is None else
+                                 project.values.get(code) != value) for code, value in changes.items())
+                button.setEnabled(effective)
+                button.setToolTip('Одно действие отмены. Данные ПЧ не изменяются.' if effective
+                                  else 'Нет изменений для выбранных строк')
+            except ValueError as exc:
+                button.setEnabled(False)
+                button.setToolTip(str(exc))
+
+    def _apply_selection(self, take_sample):
+        try:
+            changes = self._selection_changes(take_sample)
+            self.projects[self.model.currentText()].apply_changes(changes)
+        except ValueError as exc:
+            self.show_validation(str(exc))
+            return
+        self._update_project_status()
+        self._render()
+
+    def _take_sample(self):
+        self._apply_selection(True)
+
+    def _remove_values(self):
+        self._apply_selection(False)
 
     @staticmethod
     def _display_value(code, value):
@@ -395,6 +474,22 @@ class CatalogView(QWidget):
         self._render()
 
     def _show_detail(self):
+        if self._rendering:
+            return
+        selected = self._selected_entries()
+        if len(selected) > 1:
+            lines = [f'Выбрано параметров: {len(selected)}',
+                     'Перенос и очистка меняют только локальный проект.',
+                     'Весь выбранный набор проверяется до применения; отмена — одним действием.', '']
+            project = self.projects[self.model.currentText()]
+            for entry in selected:
+                lines.append(f'{entry.code} — {entry.name}')
+                lines.append('Проект: ' + self._display_value(entry.code, project.values.get(entry.code)))
+                if self.comparison is not None:
+                    lines.append('Образец: ' + self._display_value(entry.code, self.comparison.values.get(entry.code)))
+                lines.append('')
+            self.detail.setPlainText('\n'.join(lines))
+            return
         row = self.table.currentRow()
         if row < 0 or row >= len(self.visible_entries):
             self.detail.clear()

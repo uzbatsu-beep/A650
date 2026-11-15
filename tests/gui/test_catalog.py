@@ -299,3 +299,63 @@ def test_failed_read_keeps_old_value_stale_and_unscaled_numbers_unread(app):
         assert not requests
     finally:
         view.close()
+
+
+def test_take_sample_batch_disappears_from_difference_filter_and_undo_restores(app):
+    from a650.a650lib.offline_project import OfflineProject
+    view = CatalogView()
+    try:
+        view.projects['A650'] = OfflineProject('A650', {'F15.01': 1, 'F13.01': '10.0'})
+        view.comparison = OfflineProject('A650', {'F15.01': 0, 'F13.01': '20.0'})
+        view.differences_only.setEnabled(True)
+        view.differences_only.setChecked(True)
+        view.table.selectAll()
+        assert view.take_sample_button.isEnabled()
+        view.take_sample_button.click()
+        assert view.projects['A650'].values == {'F15.01': 0, 'F13.01': '20.0'}
+        assert view.table.rowCount() == 0
+        assert not view.take_sample_button.isEnabled()
+        view.undo_button.click()
+        assert view.projects['A650'].values == {'F15.01': 1, 'F13.01': '10.0'}
+        assert view.table.rowCount() == 2
+        assert not view.projects['A650'].can_undo
+    finally:
+        view.close()
+
+
+def test_take_unknown_sample_is_blocked_and_clear_is_undoable(app):
+    from a650.a650lib.offline_project import OfflineProject
+    view = CatalogView()
+    try:
+        view.projects['A650'] = OfflineProject('A650', {'F15.01': 1})
+        view.comparison = OfflineProject('A650', {'F15.01': 9})
+        view.search.setText('F15.01')
+        view.table.selectRow(0)
+        assert not view.take_sample_button.isEnabled()
+        view._take_sample()  # handler also guards against invalid programmatic requests
+        assert view.projects['A650'].values['F15.01'] == 1
+        assert view.remove_value_button.isEnabled()
+        view.remove_value_button.click()
+        assert 'F15.01' not in view.projects['A650'].values
+        assert view.table.item(0, 4).text() == 'Выбрать…'
+        view.undo_button.click()
+        assert view.projects['A650'].values['F15.01'] == 1
+        assert not view.projects['A650'].dirty
+    finally:
+        view.close()
+
+
+def test_selection_with_missing_sample_never_partially_merges(app):
+    from a650.a650lib.offline_project import OfflineProject
+    view = CatalogView()
+    try:
+        view.projects['A650'] = OfflineProject('A650', {'F15.00': 2, 'F15.01': 1})
+        view.comparison = OfflineProject('A650', {'F15.01': 0})
+        view.group.setCurrentText('F15')
+        view.table.selectAll()
+        assert not view.take_sample_button.isEnabled()
+        view._take_sample()
+        assert view.projects['A650'].values == {'F15.00': 2, 'F15.01': 1}
+        assert not view.projects['A650'].can_undo
+    finally:
+        view.close()
