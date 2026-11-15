@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QTimer
 
+from .. import __version__
 from ..a650lib.register_map import RegisterMap
 from .controller import DriveController
 from .catalog import CatalogView
@@ -38,7 +39,7 @@ def _load_map() -> RegisterMap:
 class MainWindow(QMainWindow):
     def __init__(self, controller: DriveController | None = None) -> None:
         super().__init__()
-        self.setWindowTitle("Конфигуратор ONI A650 — прототип")
+        self.setWindowTitle(f"Конфигуратор ONI A650 · {__version__} — прототип")
         self.resize(1180, 850)
         self.ctrl = controller or DriveController(self)
         self.map = _load_map()
@@ -76,6 +77,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(central, "Подключение и мониторинг")
         self.catalog = CatalogView()
         self.tabs.addTab(self.catalog, "Каталог параметров")
+        self.catalog.editable_only.setChecked(True)
+        self.tabs.setCurrentWidget(self.catalog)
         self.setCentralWidget(self.tabs)
 
         bar = self.statusBar()
@@ -234,6 +237,8 @@ def run_gui(argv: list[str] | None = None, start_simulated: bool = False,
         # PySide6 rejects argv=None here; always pass a real list.
         app = QApplication(list(sys.argv) if argv is None else list(argv))
     app.setStyleSheet(style_app())
+    app.setApplicationName("ONI A650 Configurator")
+    app.setApplicationVersion(__version__)
     win = MainWindow()
     win.show()
     if start_simulated:
