@@ -217,3 +217,85 @@ def test_clearing_comparison_keeps_current_values_and_history(app):
         assert 'F15.01' in view.detail.toPlainText()
     finally:
         view.close()
+
+
+def test_observations_keep_timestamp_and_ignore_old_connection(app):
+    import time
+    view = CatalogView()
+    try:
+        view.set_connection(True)
+        view.search.setText('F15.01')
+        view._request_read()
+        token = view._read_token
+        view.receive_values(token, {'F15.01': 1})
+        assert 'Чётная' in view.table.item(0, 6).text()
+        stamp = view.observed['F15.01']['stamp']
+        view.observed['F15.01']['time'] = time.monotonic() - 6
+        view._expire_observations()
+        assert 'Устарело' in view.table.item(0, 6).text()
+        assert view.observed['F15.01']['stamp'] == stamp
+        view.set_connection(False)
+        view.receive_values(token, {'F15.01': 0})
+        assert view.observed['F15.01']['value'] == 1
+        assert not view.read_button.isEnabled()
+        assert view.projects['A650'].values == {}
+    finally:
+        view.close()
+
+
+def test_real_controller_to_catalog_reads_without_writing(app):
+    import time
+    from a650.gui.app import MainWindow
+    win = MainWindow()
+    def wait_for(condition):
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            app.processEvents()
+            if condition():
+                return
+            time.sleep(0.005)
+        pytest.fail('reading did not finish')
+    try:
+        win.ctrl.connect_drive(simulate=True, session='catalog-read-test')
+        wait_for(lambda: win.catalog.read_button.isEnabled())
+        view = win.catalog
+        view.search.setText('F15.01')
+        view.read_button.click()
+        assert not view.read_button.isEnabled()
+        wait_for(lambda: 'F15.01' in view.observed)
+        assert view.observed['F15.01']['value'] == 0
+        assert win.ctrl.client.transport.log[-1][1] == 3
+        assert all(frame[1] == 3 for frame in win.ctrl.client.transport.log)
+        view.commit_edit('F15.01', 1)
+        view.table.selectRow(0)
+        assert 'Проект отличается от симулятора' in view.detail.toPlainText()
+        win.ctrl.disconnect_drive()
+        wait_for(lambda: not view.read_button.isEnabled())
+        assert view.observed['F15.01']['stale']
+    finally:
+        win.catalog.unsaved.clear()
+        win.close()
+
+
+def test_failed_read_keeps_old_value_stale_and_unscaled_numbers_unread(app):
+    view = CatalogView()
+    try:
+        view.set_connection(True)
+        view.search.setText('F15.01')
+        view._request_read()
+        token = view._read_token
+        view.receive_values(token, {'F15.01': 2})
+        stamp = view.observed['F15.01']['stamp']
+        view._request_read()
+        view.read_failed(view._read_token, 'тайм-аут')
+        assert view.observed['F15.01']['value'] == 2
+        assert view.observed['F15.01']['stamp'] == stamp
+        assert 'Устарело' in view.table.item(0, 6).text()
+        view.search.setText('F13.01')
+        assert view.table.item(0, 6).text() == 'Нет подтверждённого кодека'
+        requests = []
+        view.readRequested.connect(lambda codes, token: requests.append(codes))
+        view._request_read()
+        assert not requests
+    finally:
+        view.close()

@@ -1,6 +1,8 @@
 """Typed offline projects, history and comparisons; no hardware writes."""
 from pathlib import Path
-from PySide6.QtCore import Qt
+from datetime import datetime
+import time
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QPlainTextEdit, QTableWidget,
@@ -16,6 +18,7 @@ def address(value):
 
 
 class CatalogView(QWidget):
+    readRequested = Signal(object, int)
     def __init__(self, parent=None):
         super().__init__(parent)
         self.entries = ()
@@ -24,6 +27,10 @@ class CatalogView(QWidget):
         self.unsaved = set()
         self.comparison = None
         self._rendering = False
+        self.observed = {}
+        self._read_token = 0
+        self._reading = False
+        self._simulated_connection = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(26, 22, 26, 22)
         layout.setSpacing(14)
@@ -54,6 +61,10 @@ class CatalogView(QWidget):
         actions.addWidget(self.clear_compare_button)
         actions.addWidget(self.undo_button)
         actions.addWidget(self.redo_button)
+        self.read_button = QPushButton("Считать из симулятора")
+        self.read_button.setEnabled(False)
+        self.read_button.clicked.connect(self._request_read)
+        actions.addWidget(self.read_button)
         actions.addStretch()
         layout.addLayout(actions)
         layout.addWidget(self.project_status)
@@ -85,8 +96,8 @@ class CatalogView(QWidget):
         warning.setWordWrap(True)
         warning.setObjectName("notice")
         layout.addWidget(warning)
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(['Код', 'Название', 'Образец', 'Проверка', 'Проект', 'Сравнение'])
+        self.table = QTableWidget(0, 7)
+        self.table.setHorizontalHeaderLabels(['Код', 'Название', 'Образец', 'Проверка', 'Проект', 'Сравнение', 'ПЧ · симулятор'])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -102,6 +113,7 @@ class CatalogView(QWidget):
         self.table.setColumnWidth(3, 135)
         self.table.setColumnWidth(4, 155)
         self.table.setColumnWidth(5, 100)
+        self.table.setColumnWidth(6, 240)
         content = QSplitter()
         content.addWidget(self.table)
         self.detail = QPlainTextEdit()
@@ -127,8 +139,16 @@ class CatalogView(QWidget):
         self.differences_only.toggled.connect(self._render)
         self.table.itemSelectionChanged.connect(self._show_detail)
         self._load(self.model.currentText())
+        self._freshness_timer = QTimer(self)
+        self._freshness_timer.setInterval(1000)
+        self._freshness_timer.timeout.connect(self._expire_observations)
+        self._freshness_timer.start()
 
     def _load(self, model):
+        self._read_token += 1
+        self._reading = False
+        self.observed.clear()
+        self.read_button.setEnabled(self._simulated_connection)
         self.entries = load_catalog(model)
         if self.comparison is not None and self.comparison.model != model:
             self.comparison = None
@@ -143,6 +163,62 @@ class CatalogView(QWidget):
             self.differences_only.setChecked(False)
         self._update_project_status()
         self._render()
+
+    def set_connection(self, simulated):
+        self._read_token += 1
+        self._reading = False
+        self._simulated_connection = simulated
+        self.read_button.setEnabled(simulated)
+        for item in self.observed.values():
+            item['stale'] = True
+        self._render()
+
+    def _request_read(self):
+        if self._reading or not self._simulated_connection:
+            return
+        codes = [e.code for e in self.visible_entries if e.code in ENUMS
+                 and not e.conflict and not e.duplicate]
+        if not codes:
+            self.show_validation('В текущем фильтре нет параметров с поддержанным кодеком чтения')
+            return
+        self._reading = True
+        self._read_token += 1
+        self.read_button.setEnabled(False)
+        self.project_status.setText('Чтение перечислений из симулятора…')
+        self.readRequested.emit(codes, self._read_token)
+
+    def receive_values(self, token, values):
+        if token != self._read_token:
+            return
+        now = time.monotonic()
+        stamp = datetime.now().strftime('%H:%M:%S')
+        for code, value in values.items():
+            self.observed[code] = {'value': value, 'time': now, 'stamp': stamp, 'stale': False}
+        self._reading = False
+        self.read_button.setEnabled(self._simulated_connection)
+        self._update_project_status()
+        self._render()
+
+    def read_failed(self, token, message):
+        if token != self._read_token:
+            return
+        for observation in self.observed.values():
+            observation['stale'] = True
+        self._reading = False
+        self.read_button.setEnabled(self._simulated_connection)
+        self._render()
+        self.show_validation('Ошибка чтения: ' + message)
+
+    def _expire_observations(self):
+        if self.table.state() == QAbstractItemView.State.EditingState:
+            return
+        changed = False
+        for observation in self.observed.values():
+            if not observation['stale'] and time.monotonic() - observation['time'] > 5:
+                observation['stale'] = True
+                changed = True
+        if changed:
+            self._render()
 
     def show_validation(self, message):
         self.project_status.setText(message)
@@ -222,6 +298,8 @@ class CatalogView(QWidget):
             self._update_project_status()
 
     def _render(self, *_):
+        self.table.setColumnHidden(2, self.comparison is None)
+        self.table.setColumnHidden(5, self.comparison is None)
         selected = self.table.currentRow()
         selected_key = None
         if 0 <= selected < len(self.visible_entries):
@@ -265,7 +343,16 @@ class CatalogView(QWidget):
             else:
                 comparison = 'Отличается'
             sample = self._display_value(entry.code, other) if self.comparison else '—'
-            for col, text in enumerate((entry.code, entry.name, sample, status, display, comparison)):
+            observation = self.observed.get(entry.code)
+            if observation:
+                quality = 'Устарело' if observation['stale'] else 'Считано'
+                device = self._display_value(entry.code, observation['value'])
+                if not observation['stale'] and value is not None:
+                    device += ' · совпадает' if value == observation['value'] else ' · отличается'
+                device += f" · {quality} {observation['stamp']}"
+            else:
+                device = 'Не прочитано' if entry.code in ENUMS else 'Нет подтверждённого кодека'
+            for col, text in enumerate((entry.code, entry.name, sample, status, display, comparison, device)):
                 item = QTableWidgetItem(text)
                 item.setToolTip(text)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -315,6 +402,14 @@ class CatalogView(QWidget):
         entry = self.visible_entries[row]
         project_value = self.projects[self.model.currentText()].values.get(entry.code)
         conflicts = [f'Проект: {self._display_value(entry.code, project_value)}']
+        observation = self.observed.get(entry.code)
+        if observation:
+            raw = observation['value']
+            conflicts.append(f"ПЧ · симулятор: {self._display_value(entry.code, raw)}; последнее чтение {observation['stamp']}")
+            if observation['stale']:
+                conflicts.append('Данные устарели: повторите чтение перед сравнением.')
+            elif project_value is not None:
+                conflicts.append('Проект совпадает с симулятором.' if project_value == raw else 'Проект отличается от симулятора.')
         if self.comparison is not None:
             other = self.comparison.values.get(entry.code)
             conflicts.append(f'Образец: {self._display_value(entry.code, other)}')
@@ -340,6 +435,6 @@ class CatalogView(QWidget):
             f'Источник: OniDriveStudio 1.2.7.0, исследовательская выгрузка; инструкция {entry.source_location}.',
             'Формула адреса F/U: руководство A650, издание 3, приложение A.4.3, стр. 158.',
             'Проверка на устройстве: не проводилась. Запись из каталога недоступна.',
-            'Значение ПЧ: не прочитано; сравнение недоступно до чтения.',
+            'Показания симулятора не являются проверкой реального ПЧ.',
             *conflicts,
         ]))

@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         self.control.stopRequested.connect(self._on_stop)
         self.control.setFreqRequested.connect(self._on_setfreq)
         self.inspector.readRequested.connect(self._on_read)
+        self.catalog.readRequested.connect(self._read_catalog)
 
     # -- connection --------------------------------------------------------------
 
@@ -105,7 +106,13 @@ class MainWindow(QMainWindow):
         self.conn_panel.connection_failed(message)
         self.lbl_bus.setText("Нет подключения")
 
+    def _read_catalog(self, codes, token):
+        self.ctrl.read_simulated_parameters(codes,
+            lambda values: self.catalog.receive_values(token, values),
+            lambda message: self.catalog.read_failed(token, message))
+
     def _on_connected(self, desc: str) -> None:
+        self.catalog.set_connection(self.ctrl.simulate)
         self.conn_panel.set_connected(True)
         self.lbl_bus.setText(desc)
         self.log.append(f"Подключено: {desc}"
@@ -137,6 +144,7 @@ class MainWindow(QMainWindow):
         self.ctrl.disconnect_drive()
 
     def _on_disconnected(self) -> None:
+        self.catalog.set_connection(False)
         self.conn_panel.set_connected(False)
         self.control.set_enabled(False)
         self.status_card.show_state(None)

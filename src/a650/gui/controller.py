@@ -226,6 +226,27 @@ class DriveController(QObject):
              ecb: Optional[Callable[[str], None]] = None) -> None:
         self._post(lambda: self.client.read_registers(address, count), cb, ecb)
 
+    def read_simulated_parameters(self, codes, cb, ecb):
+        """Read the supported enum subset; never use guessed numeric scaling."""
+        from ..a650lib.addresses import parameter_addresses
+        from ..a650lib.offline_project import ENUMS
+        client = self.client
+        if client is None or not self.simulate:
+            ecb('Чтение каталога пока доступно только в симуляторе')
+            return
+        codes = tuple(codes)
+        if not codes or any(code not in ENUMS for code in codes):
+            ecb('В запросе есть параметры без проверенного кодека')
+            return
+
+        def read_values():
+            if self._closing or self.client is not client or not self.simulate:
+                raise RuntimeError('Соединение изменилось до начала чтения')
+            return {code: client.read_registers(parameter_addresses(code)[0])[0]
+                    for code in codes}
+
+        self._post(read_values, cb, ecb)
+
     def status(self, cb: Callable[[dict], None],
                ecb: Optional[Callable[[str], None]] = None) -> None:
         def get():
