@@ -18,6 +18,7 @@ a = Analysis(
         # src/ and silently drops every a650.* submodule.
         "a650",
         "a650.cli",
+        "a650.diagnostics",
         "a650.repl",
         "a650.client",
         "a650.a650lib",

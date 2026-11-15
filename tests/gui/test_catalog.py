@@ -25,6 +25,31 @@ def test_main_window_starts_on_editable_parameters_and_identifies_build(app):
         window.close()
 
 
+def test_sidebar_collapse_search_and_model_switch_preserve_local_project(app):
+    view = CatalogView()
+    try:
+        view.show()
+        app.processEvents()
+        view.editable_only.setChecked(True)
+        view.commit_edit('F15.01', 1)
+        assert view.result_count.text() == '14 из 531 параметров'
+        view.sidebar_toggle.click()
+        assert not view.sidebar.isVisible() and view.sidebar_show.isVisible()
+        view.search.setText('F15.01')
+        assert view.result_count.text() == '1 из 531 параметров'
+        assert 'Чётная' in view.table.item(0, 4).text()
+        view.sidebar_show.click()
+        assert view.sidebar.isVisible() and not view.sidebar_show.isVisible()
+        view.model.setCurrentText('A650M')
+        assert view.result_count.text() == '1 из 617 параметров'
+        view.model.setCurrentText('A650')
+        assert view.projects['A650'].values == {'F15.01': 1}
+        view.undo_button.click()
+        assert view.projects['A650'].values == {} and not view.projects['A650'].dirty
+    finally:
+        view.close()
+
+
 def test_model_search_duplicates_and_conflicting_addresses():
     basic, extended = load_catalog('A650'), load_catalog('A650M')
     assert len(search_catalog(basic, 'F13.01')) == 1

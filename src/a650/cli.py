@@ -248,6 +248,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--audit", default=None, help="audit log path (default: ~/.a650/audit.jsonl)")
     sub = ap.add_subparsers(dest="cmd", required=False)
 
+    from .diagnostics import add_arguments, run_diagnostic
+    diagnostic_parser = add_arguments(sub.add_parser(
+        "diagnostics", help="experimental read-only bench scan (FC03, no writes)"))
+    diagnostic_parser.set_defaults(fn=lambda args: run_diagnostic(args, diagnostic_parser))
+
     p = sub.add_parser("read", help="read register(s)")
     p.add_argument("address")
     p.add_argument("--count", type=int, default=1)

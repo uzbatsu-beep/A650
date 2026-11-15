@@ -38,6 +38,7 @@ def test_archive_contains_launcher_examples_provenance_and_correct_checksums(tmp
     with ZipFile(archive) as bundle:
         assert set(bundle.namelist()) == {
             'a650.exe', 'start-preview.cmd', 'README-ru.md', 'RELEASE-NOTES-ru.md', 'BUILD-INFO.json',
+            'BENCH-DIAGNOSTICS-ru.md',
             'examples/demo.a650.json', 'examples/comparison.a650.json', 'examples/synthetic-oni-profile.ods'}
         assert bundle.read('a650.exe') == binary.read_bytes()
         info = json.loads(bundle.read('BUILD-INFO.json'))

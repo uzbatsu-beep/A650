@@ -41,6 +41,7 @@ def package_preview(binary, output_dir, commit, source_ref):
         shutil.copytree(ROOT / 'packaging' / 'preview', stage, dirs_exist_ok=True)
         shutil.copy2(binary, stage / 'a650.exe')
         shutil.copy2(notes, stage / 'RELEASE-NOTES-ru.md')
+        shutil.copy2(ROOT / 'docs' / 'BENCH_DIAGNOSTICS.md', stage / 'BENCH-DIAGNOSTICS-ru.md')
         info = {'version': __version__, 'commit': commit, 'source_ref': source_ref,
                 'platform': 'windows-x86_64', 'executable': 'a650.exe',
                 'executable_sha256': digest(stage / 'a650.exe')}
