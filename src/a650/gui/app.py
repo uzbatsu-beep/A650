@@ -205,6 +205,16 @@ class MainWindow(QMainWindow):
     # -- teardown -------------------------------------------------------------------------
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        if self.catalog.unsaved:
+            models = ', '.join(sorted(self.catalog.unsaved))
+            answer = QMessageBox.question(
+                self, 'Несохранённые изменения',
+                f'Есть несохранённые изменения проекта: {models}. Закрыть без сохранения?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
         self.ctrl.shutdown()
         super().closeEvent(event)
 

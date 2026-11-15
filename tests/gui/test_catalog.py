@@ -1,5 +1,6 @@
 import pytest
-from PySide6.QtWidgets import QApplication, QAbstractItemView
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
 from a650.a650lib.catalog import load_catalog, search_catalog
 from a650.gui.catalog import CatalogView
 
@@ -35,8 +36,60 @@ def test_catalog_view_shows_conflict_without_write_actions(app):
         text = view.detail.toPlainText()
         assert '0x1206' in text and '0x1208' in text
         assert 'Запись из каталога недоступна' in text
-        assert view.table.editTriggers() == QAbstractItemView.EditTrigger.NoEditTriggers
+        assert not (view.table.item(0, 4).flags() & Qt.ItemFlag.ItemIsEditable)
         view.model.setCurrentText('A650')
         assert view.table.rowCount() == 0
+    finally:
+        view.close()
+
+
+def test_typed_editors_and_filter_preserve_values(app):
+    from PySide6.QtWidgets import QComboBox, QLineEdit
+    from a650.gui.project_delegate import ProjectDelegate
+    view = CatalogView()
+    try:
+        view.search.setText('F15.01')
+        item = view.table.item(0, 4)
+        index = view.table.indexFromItem(item)
+        delegate = view.table.itemDelegateForColumn(4)
+        editor = delegate.createEditor(view.table, None, index)
+        assert isinstance(editor, QComboBox)
+        assert [editor.itemData(i) for i in range(1, 5)] == [0, 1, 2, 3]
+        delegate.setEditorData(editor, index)
+        assert editor.currentData() is None
+        editor.setCurrentIndex(editor.findData(1))
+        delegate.setModelData(editor, view.table.model(), index)
+        assert view.projects['A650'].values['F15.01'] == 1
+        assert 'Чётная' in view.table.item(0, 4).text()
+        view.search.setText('F13.01')
+        index = view.table.indexFromItem(view.table.item(0, 4))
+        editor = delegate.createEditor(view.table, None, index)
+        assert isinstance(editor, QLineEdit)
+        editor.setText('50,0')
+        delegate.setModelData(editor, view.table.model(), index)
+        assert view.projects['A650'].values['F13.01'] == '50.0'
+        view.search.setText('F15.01')
+        assert 'Чётная' in view.table.item(0, 4).text()
+        assert view.table.item(0, 5).text() == 'Не выбрано'
+    finally:
+        view.close()
+
+
+def test_compare_file_reports_difference_without_changing_project(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    from a650.a650lib.offline_project import OfflineProject
+    view = CatalogView()
+    try:
+        view.projects['A650'].set('F15.01', 1)
+        baseline = OfflineProject('A650', {'F15.01': 0})
+        path = tmp_path / 'baseline.a650.json'
+        baseline.save(path)
+        monkeypatch.setattr(QFileDialog, 'getOpenFileName', lambda *args: (str(path), ''))
+        view.search.setText('F15.01')
+        view._compare_project()
+        assert view.table.item(0, 5).text() == 'Было: 0'
+        assert view.projects['A650'].values['F15.01'] == 1
+        view.search.setText('F13.01')
+        assert view.table.item(0, 5).text() == 'Не задано'
     finally:
         view.close()
