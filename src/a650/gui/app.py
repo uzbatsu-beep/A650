@@ -14,13 +14,14 @@ from decimal import Decimal
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QVBoxLayout,
+    QApplication, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QTabWidget, QVBoxLayout,
     QWidget,
 )
 from PySide6.QtCore import QTimer
 
 from ..a650lib.register_map import RegisterMap
 from .controller import DriveController
+from .catalog import CatalogView
 from .widgets import (
     ConnectionPanel, ControlDeck, EventLog, RegisterInspector, StatusCard,
     style_app,
@@ -71,7 +72,11 @@ class MainWindow(QMainWindow):
         central = QWidget()
         outer = QVBoxLayout(central)
         outer.addLayout(splitter_row)
-        self.setCentralWidget(central)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(central, "Подключение и мониторинг")
+        self.catalog = CatalogView()
+        self.tabs.addTab(self.catalog, "Каталог параметров")
+        self.setCentralWidget(self.tabs)
 
         bar = self.statusBar()
         self.lbl_bus = QLabel("Нет подключения")

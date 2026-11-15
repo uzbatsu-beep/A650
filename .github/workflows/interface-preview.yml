@@ -1,0 +1,51 @@
+name: Windows interface preview
+
+on:
+  push:
+    branches:
+      - codex/a650-interface-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev,build]"
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/ -q
+      - name: Build executable
+        run: pyinstaller packaging/a650.spec --distpath dist --workpath build --noconfirm
+      - name: Verify executable and GUI startup
+        env:
+          QT_QPA_PLATFORM: offscreen
+        shell: pwsh
+        run: |
+          & dist/a650.exe --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & dist/a650.exe --simulate read 0x3000
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $process = Start-Process -FilePath dist/a650.exe -ArgumentList '--simulate','gui','--auto-quit','4000' -PassThru
+          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'GUI startup timed out' }
+          if ($process.ExitCode -ne 0) { throw "GUI exited with code $($process.ExitCode)" }
+      - name: Add launcher
+        shell: pwsh
+        run: Copy-Item packaging/preview/start-preview.cmd dist/start-preview.cmd
+      - name: Upload Windows preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: a650-windows-interface-preview
+          path: |
+            dist/a650.exe
+            dist/start-preview.cmd
+          if-no-files-found: error
+          retention-days: 14
