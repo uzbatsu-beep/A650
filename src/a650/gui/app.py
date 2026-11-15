@@ -109,7 +109,7 @@ class MainWindow(QMainWindow):
     def _read_catalog(self, codes, token):
         self.ctrl.read_simulated_parameters(codes,
             lambda values: self.catalog.receive_values(token, values),
-            lambda message: self.catalog.read_failed(token, message))
+            lambda message: self.catalog.read_failed(token, message), model=self.catalog.model.currentText())
 
     def _on_connected(self, desc: str) -> None:
         self.catalog.set_connection(self.ctrl.simulate)

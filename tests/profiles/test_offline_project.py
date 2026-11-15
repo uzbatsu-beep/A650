@@ -103,3 +103,32 @@ def test_failed_atomic_save_keeps_dirty_and_original_file(tmp_path, monkeypatch)
         project.save(path)
     assert project.dirty and path.read_bytes() == original
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_batch_changes_are_atomic_and_one_undo_step():
+    project = OfflineProject('A650', {'F15.01': 9, 'F13.01': '20.0'})
+    project.apply_changes({'F15.01': 1, 'F13.01': None, 'F03.00': '15.0'})
+    assert project.values == {'F15.01': 1, 'F03.00': '15.0'}
+    project.undo()
+    assert project.values == {'F15.01': 9, 'F13.01': '20.0'}
+    assert not project.dirty
+    assert not project.can_undo
+    project.redo()
+    assert project.values == {'F15.01': 1, 'F03.00': '15.0'}
+    before = project.values.copy()
+    with pytest.raises(ValueError):
+        project.apply_changes({'F15.01': 2, 'F03.00': '6001.0'})
+    assert project.values == before
+
+
+def test_removal_is_not_zero_and_missing_removal_does_not_change_history(tmp_path):
+    project = OfflineProject('A650', {'F15.01': 0})
+    project.apply_changes({'F15.01': None})
+    assert 'F15.01' not in project.values
+    project.apply_changes({'F15.01': None})
+    project.undo()
+    assert project.values['F15.01'] == 0 and not project.can_undo
+    path = tmp_path / 'profile.json'
+    project.apply_changes({'F15.01': None})
+    project.save(path)
+    assert OfflineProject.load(path).values == {}

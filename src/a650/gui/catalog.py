@@ -2,15 +2,19 @@
 from pathlib import Path
 from datetime import datetime
 import time
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer, QItemSelectionModel
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QPlainTextEdit, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget, QSplitter, QFrame, QPushButton,
                                QFileDialog, QMessageBox, QCheckBox)
 from ..a650lib.catalog import load_catalog, search_catalog
-from ..a650lib.offline_project import OfflineProject, ENUMS, DECIMALS, UNITS
+from ..a650lib.offline_project import OfflineProject, validate
+from ..a650lib.editor_profile import load_editor_profile
 from .project_delegate import ProjectDelegate
+from .studio_import import StudioImportDialog
+from ..a650lib.studio_profile import read_studio_profile
+from ..a650lib.studio_import import preview_studio_profile
 
 
 def address(value):
@@ -23,6 +27,7 @@ class CatalogView(QWidget):
         super().__init__(parent)
         self.entries = ()
         self.visible_entries = ()
+        self.editor_profile = load_editor_profile("A650")
         self.projects = {name: OfflineProject(name) for name in ("A650", "A650M")}
         self.unsaved = set()
         self.comparison = None
@@ -96,11 +101,25 @@ class CatalogView(QWidget):
         warning.setWordWrap(True)
         warning.setObjectName("notice")
         layout.addWidget(warning)
+        selection_actions = QHBoxLayout()
+        self.import_ods_button = QPushButton("Импорт ODS…")
+        self.import_ods_button.clicked.connect(self._import_ods)
+        selection_actions.addWidget(self.import_ods_button)
+        self.take_sample_button = QPushButton("Взять выбранные из образца")
+        self.remove_value_button = QPushButton("Убрать локальные значения")
+        self.selection_status = QLabel("Выберите строки · Ctrl/Shift для нескольких")
+        self.selection_status.setObjectName("muted")
+        selection_actions.addWidget(self.take_sample_button)
+        selection_actions.addWidget(self.remove_value_button)
+        selection_actions.addWidget(self.selection_status, 1)
+        layout.addLayout(selection_actions)
+        self.take_sample_button.clicked.connect(self._take_sample)
+        self.remove_value_button.clicked.connect(self._remove_values)
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(['Код', 'Название', 'Образец', 'Проверка', 'Проект', 'Сравнение', 'ПЧ · симулятор'])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
         self.table.setItemDelegateForColumn(4, ProjectDelegate(self))
 
@@ -138,6 +157,7 @@ class CatalogView(QWidget):
         self.editable_only.toggled.connect(self._render)
         self.differences_only.toggled.connect(self._render)
         self.table.itemSelectionChanged.connect(self._show_detail)
+        self.table.itemSelectionChanged.connect(self._update_selection_actions)
         self._load(self.model.currentText())
         self._freshness_timer = QTimer(self)
         self._freshness_timer.setInterval(1000)
@@ -145,6 +165,7 @@ class CatalogView(QWidget):
         self._freshness_timer.start()
 
     def _load(self, model):
+        self.editor_profile = load_editor_profile(model)
         self._read_token += 1
         self._reading = False
         self.observed.clear()
@@ -176,7 +197,7 @@ class CatalogView(QWidget):
     def _request_read(self):
         if self._reading or not self._simulated_connection:
             return
-        codes = [e.code for e in self.visible_entries if e.code in ENUMS
+        codes = [e.code for e in self.visible_entries if e.code in self.editor_profile.enums
                  and not e.conflict and not e.duplicate]
         if not codes:
             self.show_validation('В текущем фильтре нет параметров с поддержанным кодеком чтения')
@@ -273,6 +294,30 @@ class CatalogView(QWidget):
         self._render()
         self._update_project_status()
 
+    def _import_ods(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Предпросмотр ODS OniDriveStudio", "", "OniDriveStudio (*.ods)")
+        if not path:
+            return
+        model = self.model.currentText()
+        try:
+            source = read_studio_profile(path)
+            rows = preview_studio_profile(source, model)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Не удалось открыть ODS", str(exc))
+            return
+        dialog = StudioImportDialog(rows, model, self, project_values=self.projects[model].values)
+        dialog.setWindowTitle(f'Импорт ODS · {Path(path).name} · {model}')
+        try:
+            if dialog.exec() != StudioImportDialog.DialogCode.Accepted:
+                return
+            changes = dialog.selected_changes()
+        finally:
+            dialog.deleteLater()
+        # Apply only after explicit selection/acceptance; one undo step.
+        self.projects[model].apply_changes(changes)
+        self._update_project_status()
+        self._render()
+
     def _open_project(self):
         path, _ = QFileDialog.getOpenFileName(self, "Открыть офлайн-проект", "", "Проект A650 (*.a650.json *.json)")
         if not path:
@@ -300,35 +345,38 @@ class CatalogView(QWidget):
     def _render(self, *_):
         self.table.setColumnHidden(2, self.comparison is None)
         self.table.setColumnHidden(5, self.comparison is None)
-        selected = self.table.currentRow()
-        selected_key = None
-        if 0 <= selected < len(self.visible_entries):
-            entry = self.visible_entries[selected]
-            selected_key = (entry.code, entry.source_location)
+        selected_keys = {(self.visible_entries[index.row()].code,
+                          self.visible_entries[index.row()].source_location)
+                         for index in self.table.selectionModel().selectedRows()
+                         if index.row() < len(self.visible_entries)}
         self._rendering = True
         self.visible_entries = search_catalog(self.entries, self.search.text(), self.group.currentText())
         if self.editable_only.isChecked():
             self.visible_entries = tuple(entry for entry in self.visible_entries
-                if (entry.code in ENUMS or entry.code in DECIMALS)
+                if (entry.code in self.editor_profile.enums or entry.code in self.editor_profile.decimals)
                 and not entry.duplicate and not entry.conflict)
         project = self.projects[self.model.currentText()]
         if self.differences_only.isChecked() and self.comparison is not None:
             self.visible_entries = tuple(e for e in self.visible_entries
                 if project.values.get(e.code) != self.comparison.values.get(e.code))
+        self.table.setColumnHidden(3, not any(e.conflict or e.duplicate for e in self.visible_entries))
+        self.table.setColumnHidden(6, not self._simulated_connection and not self.observed)
+        self.table.clearSelection()
+        self.table.setCurrentCell(-1, -1)
         self.table.setRowCount(len(self.visible_entries))
         for row, entry in enumerate(self.visible_entries):
             status = 'Конфликт' if entry.conflict else 'Дубликат' if entry.duplicate else 'Не проверено на ПЧ'
             if entry.conflict and entry.duplicate:
                 status = 'Конфликт, дубликат'
-            editable = entry.code in ENUMS or entry.code in DECIMALS
+            editable = entry.code in self.editor_profile.enums or entry.code in self.editor_profile.decimals
             value = project.values.get(entry.code)
             if value is None:
                 display = 'Выбрать…' if editable else 'Не определено'
-            elif entry.code in ENUMS:
-                label = ENUMS[entry.code].get(value)
+            elif entry.code in self.editor_profile.enums:
+                label = self.editor_profile.enums[entry.code].get(value)
                 display = f'{value} — {label}' if label is not None else f'Неизвестное значение ({value})'
             else:
-                display = f'{value.replace(".", ",")} {UNITS[entry.code]}'
+                display = f'{value.replace(".", ",")} {self.editor_profile.units[entry.code]}'
             other = self.comparison.values.get(entry.code) if self.comparison else None
             if self.comparison is None:
                 comparison = 'Не выбрано'
@@ -351,7 +399,7 @@ class CatalogView(QWidget):
                     device += ' · совпадает' if value == observation['value'] else ' · отличается'
                 device += f" · {quality} {observation['stamp']}"
             else:
-                device = 'Не прочитано' if entry.code in ENUMS else 'Нет подтверждённого кодека'
+                device = 'Не прочитано' if entry.code in self.editor_profile.enums else 'Нет подтверждённого кодека'
             for col, text in enumerate((entry.code, entry.name, sample, status, display, comparison, device)):
                 item = QTableWidgetItem(text)
                 item.setToolTip(text)
@@ -365,20 +413,83 @@ class CatalogView(QWidget):
                 self.table.setItem(row, col, item)
         self._rendering = False
         self.detail.clear()
-        if selected_key:
-            for row, entry in enumerate(self.visible_entries):
-                if (entry.code, entry.source_location) == selected_key:
-                    self.table.selectRow(row)
-                    self._show_detail()
-                    break
+        first = True
+        for row, entry in enumerate(self.visible_entries):
+            if (entry.code, entry.source_location) in selected_keys:
+                index = self.table.model().index(row, 0)
+                self.table.selectionModel().select(index,
+                    QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+                if first:
+                    self.table.selectionModel().setCurrentIndex(index, QItemSelectionModel.SelectionFlag.NoUpdate)
+                    first = False
+        self._show_detail()
+        self._update_selection_actions()
 
-    @staticmethod
-    def _display_value(code, value):
+    def _selected_entries(self):
+        return [self.visible_entries[index.row()]
+                for index in self.table.selectionModel().selectedRows()
+                if 0 <= index.row() < len(self.visible_entries)]
+
+    def _selection_changes(self, take_sample):
+        selected = self._selected_entries()
+        if not selected:
+            raise ValueError('Выберите строки параметров')
+        if take_sample and (self.comparison is None or self.comparison.model != self.model.currentText()):
+            raise ValueError('Откройте образец той же модели')
+        changes = {}
+        project = self.projects[self.model.currentText()]
+        for entry in selected:
+            if entry.conflict or entry.duplicate or entry.code not in self.editor_profile.enums and entry.code not in self.editor_profile.decimals:
+                raise ValueError(f'{entry.code}: конфликт или нет проверенного редактора')
+            if take_sample:
+                if entry.code not in self.comparison.values:
+                    raise ValueError(f'{entry.code}: значение отсутствует в образце')
+                changes[entry.code] = validate(entry.code, self.comparison.values[entry.code], self.model.currentText())
+            elif entry.code in project.values:
+                changes[entry.code] = None
+        return changes
+
+    def _update_selection_actions(self):
+        if self._rendering:
+            return
+        selected = self._selected_entries()
+        self.selection_status.setText(f'Выбрано: {len(selected)} · операции только с проектом' if selected
+                                      else 'Выберите строки · Ctrl/Shift для нескольких')
+        for button, take_sample in ((self.take_sample_button, True), (self.remove_value_button, False)):
+            try:
+                changes = self._selection_changes(take_sample)
+                project = self.projects[self.model.currentText()]
+                effective = any((code in project.values if value is None else
+                                 project.values.get(code) != value) for code, value in changes.items())
+                button.setEnabled(effective)
+                button.setToolTip('Одно действие отмены. Данные ПЧ не изменяются.' if effective
+                                  else 'Нет изменений для выбранных строк')
+            except ValueError as exc:
+                button.setEnabled(False)
+                button.setToolTip(str(exc))
+
+    def _apply_selection(self, take_sample):
+        try:
+            changes = self._selection_changes(take_sample)
+            self.projects[self.model.currentText()].apply_changes(changes)
+        except ValueError as exc:
+            self.show_validation(str(exc))
+            return
+        self._update_project_status()
+        self._render()
+
+    def _take_sample(self):
+        self._apply_selection(True)
+
+    def _remove_values(self):
+        self._apply_selection(False)
+
+    def _display_value(self, code, value):
         if value is None:
             return 'Не задано'
-        if code in ENUMS:
-            return f'{value} — {ENUMS[code].get(value, "Неизвестное значение")}'
-        return f'{str(value).replace(".", ",")} {UNITS.get(code, "")}'.strip()
+        if code in self.editor_profile.enums:
+            return f'{value} — {self.editor_profile.enums[code].get(value, "Неизвестное значение")}'
+        return f'{str(value).replace(".", ",")} {self.editor_profile.units.get(code, "")}'.strip()
 
     def commit_edit(self, code, value):
         self.projects[self.model.currentText()].set(code, value)
@@ -395,6 +506,22 @@ class CatalogView(QWidget):
         self._render()
 
     def _show_detail(self):
+        if self._rendering:
+            return
+        selected = self._selected_entries()
+        if len(selected) > 1:
+            lines = [f'Выбрано параметров: {len(selected)}',
+                     'Перенос и очистка меняют только локальный проект.',
+                     'Весь выбранный набор проверяется до применения; отмена — одним действием.', '']
+            project = self.projects[self.model.currentText()]
+            for entry in selected:
+                lines.append(f'{entry.code} — {entry.name}')
+                lines.append('Проект: ' + self._display_value(entry.code, project.values.get(entry.code)))
+                if self.comparison is not None:
+                    lines.append('Образец: ' + self._display_value(entry.code, self.comparison.values.get(entry.code)))
+                lines.append('')
+            self.detail.setPlainText('\n'.join(lines))
+            return
         row = self.table.currentRow()
         if row < 0 or row >= len(self.visible_entries):
             self.detail.clear()
@@ -419,14 +546,17 @@ class CatalogView(QWidget):
             conflicts.append(f'Конфликт с формулой PDF: RAM {address(entry.expected_ram)}, EEPROM {address(entry.expected_eeprom)}.')
         if entry.code.startswith('H'):
             conflicts.append('Адреса H00 отсутствуют в приложении Modbus PDF; значения EXE требуют проверки.')
-        if entry.code == 'F15.01':
-            conflicts.append('Варианты приведены по PDF, стр. 133. Для варианта 8E1 текст EXE расходится с PDF; формат по умолчанию также требует проверки.')
-        if entry.code == 'F13.01':
-            conflicts.append('Офлайн-ввод 0,0–100,0 %, шаг 0,1; формат передачи в ПЧ не подтверждён.')
-        if entry.code in ENUMS and entry.code != 'F15.01':
-            conflicts.append('Варианты для офлайн-проекта сверены с руководством A650, издание 3, таблица 5.2. Применимость к конкретной модели и прошивке требует проверки.')
-        if entry.code in DECIMALS and entry.code != 'F13.01':
-            conflicts.append('Пределы офлайн-ввода взяты из руководства A650, издание 3, таблица 5.2. Масштаб передачи и условия записи не подтверждены.')
+        if entry.code in self.editor_profile.sources:
+            source = self.editor_profile.sources[entry.code]
+            pages = ', '.join(map(str, source['pages']))
+            conflicts.append(f"Редактор: профиль {self.editor_profile.model}, ревизия {self.editor_profile.revision}; {source['title']}, стр. {pages}.")
+            conflicts.extend(self.editor_profile.notes[entry.code])
+        if entry.code in self.editor_profile.enums:
+            conflicts.append('Варианты редактора:')
+            conflicts.extend(f'  {code} — {label}' for code, label in self.editor_profile.enums[entry.code].items())
+        elif entry.code in self.editor_profile.decimals:
+            low, high, step = self.editor_profile.decimals[entry.code]
+            conflicts.append(f'Редактор: {low} … {high} {self.editor_profile.units[entry.code]}, шаг {step}.')
         self.detail.setPlainText('\n'.join([
             f'{self.model.currentText()} · {entry.code} — {entry.name}',
             f'Диапазон в EXE: {entry.minimum or "не указан"} … {entry.maximum or "не указан"}; по умолчанию: {entry.default or "не указано"}',
