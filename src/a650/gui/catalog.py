@@ -12,6 +12,9 @@ from ..a650lib.catalog import load_catalog, search_catalog
 from ..a650lib.offline_project import OfflineProject, validate
 from ..a650lib.editor_profile import load_editor_profile
 from .project_delegate import ProjectDelegate
+from .studio_import import StudioImportDialog
+from ..a650lib.studio_profile import read_studio_profile
+from ..a650lib.studio_import import preview_studio_profile
 
 
 def address(value):
@@ -99,6 +102,9 @@ class CatalogView(QWidget):
         warning.setObjectName("notice")
         layout.addWidget(warning)
         selection_actions = QHBoxLayout()
+        self.import_ods_button = QPushButton("Импорт ODS…")
+        self.import_ods_button.clicked.connect(self._import_ods)
+        selection_actions.addWidget(self.import_ods_button)
         self.take_sample_button = QPushButton("Взять выбранные из образца")
         self.remove_value_button = QPushButton("Убрать локальные значения")
         self.selection_status = QLabel("Выберите строки · Ctrl/Shift для нескольких")
@@ -287,6 +293,30 @@ class CatalogView(QWidget):
         self.differences_only.setChecked(False)
         self._render()
         self._update_project_status()
+
+    def _import_ods(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Предпросмотр ODS OniDriveStudio", "", "OniDriveStudio (*.ods)")
+        if not path:
+            return
+        model = self.model.currentText()
+        try:
+            source = read_studio_profile(path)
+            rows = preview_studio_profile(source, model)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Не удалось открыть ODS", str(exc))
+            return
+        dialog = StudioImportDialog(rows, model, self, project_values=self.projects[model].values)
+        dialog.setWindowTitle(f'Импорт ODS · {Path(path).name} · {model}')
+        try:
+            if dialog.exec() != StudioImportDialog.DialogCode.Accepted:
+                return
+            changes = dialog.selected_changes()
+        finally:
+            dialog.deleteLater()
+        # Apply only after explicit selection/acceptance; one undo step.
+        self.projects[model].apply_changes(changes)
+        self._update_project_status()
+        self._render()
 
     def _open_project(self):
         path, _ = QFileDialog.getOpenFileName(self, "Открыть офлайн-проект", "", "Проект A650 (*.a650.json *.json)")
