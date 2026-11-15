@@ -2,9 +2,9 @@
   "name": "error_read_only",
   "description": "Attempt write to a read-only register -> exception",
   "slave": 1,
-  "request": "01 06 30 00 00 00 86 CA",
+  "request": "01 06 30 00 13 88 8B 9C",
   "valid_response": null,
   "exception_response": "01 86 02 C3 A1",
-  "verification": "hypothesis",
-  "notes": "HYPOTHESIS: exact exception code for read-only writes is unknown (manual mentions detailed 0x11). Raw 0x86 0x02 used as placeholder standard IllegalDataAddress."
+  "verification": "manual_example_crc_verified",
+  "notes": "A650 edition 3 App.A.7 p.161. Manual says U00.00 in setup but F00.00 in explanatory text; example sends address 0x3000. Detailed code 0x11 mechanism remains unspecified."
 }

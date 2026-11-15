@@ -23,10 +23,11 @@ class SerialTransport:
         parity_const = {"N": serial.PARITY_NONE, "E": serial.PARITY_EVEN,
                         "O": serial.PARITY_ODD}[parity.upper()]
         self._ser = serial.Serial(
-            port=port, baudrate=baudrate, bytesize=bytesize,
+            port=None, baudrate=baudrate, bytesize=bytesize,
             parity=parity_const, stopbits=stopbits,
             timeout=0.05, write_timeout=2.0,
         )
+        self._ser.port = port
 
     def open(self) -> None:
         if not self._ser.is_open:

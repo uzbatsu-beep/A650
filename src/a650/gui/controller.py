@@ -54,6 +54,7 @@ class DriveController(QObject):
     """Owns connection lifecycle; marshals all Modbus calls to the worker."""
 
     connected = Signal(str)
+    connectionFailed = Signal(str)
     disconnected = Signal()
     error = Signal(str)
 
@@ -64,6 +65,10 @@ class DriveController(QObject):
         self._callbacks: dict[int, tuple] = {}   # mutated on GUI thread only
         self.client: A650Client | None = None
         self.allow_write = False
+        self.simulate = False
+        self.connecting = False
+        self._closing = False
+        self._shutdown_wait_ms = 3000
         self.audit_path = default_audit_path()
         self._timers: dict[str, QTimer] = {}
         self._polls: dict[str, tuple] = {}
@@ -81,8 +86,15 @@ class DriveController(QObject):
     # -- lifecycle -------------------------------------------------------------
 
     def shutdown(self) -> None:
+        self._closing = True
         for pid in list(self._timers):
             self.stop_poll(pid)
+        # Drop queued work; allow only the in-flight exchange to finish.
+        while True:
+            try:
+                self._queue.get_nowait()
+            except Empty:
+                break
         if self.client is not None:
             try:
                 self.client.transport.close()
@@ -91,7 +103,7 @@ class DriveController(QObject):
             self.client = None
         self._queue.put(None)      # poison pill ends the worker pump loop
         self._thread.quit()
-        self._thread.wait(3000)
+        self._thread.wait(self._shutdown_wait_ms)
 
     @property
     def is_connected(self) -> bool:
@@ -101,30 +113,64 @@ class DriveController(QObject):
 
     def connect_drive(self, *, simulate: bool, port: str = "", slave: int = 1,
                       baud: int = 9600, parity: str = "N",
+                      stopbits: int = 1, timeout_s: float = 0.5, retries: int = 2,
                       allow_write: bool = False, session: str = "gui") -> None:
         """Open the bus on the worker thread. Emits connected(desc)/error(msg)."""
-        self.allow_write = allow_write
-        desc = "SIMULATED drive" if simulate else f"{port} {baud}-{parity}-8-1 slave={slave}"
+        if self._closing or self.connecting or self.is_connected:
+            return
+        self.connecting = True
+        desc = "Симулятор ПЧ" if simulate else f"{port.strip()} · {baud} · 8{parity}{stopbits} · адрес {slave}"
 
         def establish():
+            if self._closing:
+                return
+            if not 1 <= slave <= 247 or not 0.1 <= timeout_s <= 10 or not 0 <= retries <= 3:
+                raise ValueError("Проверьте адрес (1–247), тайм-аут (0,1–10 с) и повторы (0–3)")
+            if not simulate and (not port.strip() or baud not in (4800, 9600, 19200, 38400, 57600, 115200)
+                                 or (parity, stopbits) not in (("N", 1), ("N", 2), ("E", 1), ("O", 1))):
+                raise ValueError("Проверьте порт, скорость и формат данных F15.01")
+            self._shutdown_wait_ms = int(((timeout_s + 2.1) * (retries + 1) + 1) * 1000)
             if simulate:
                 from ..transport.fake import FakeTransport
                 transport = FakeTransport(slave=slave, session=session)
             else:
                 from ..transport.serial import SerialTransport
-                transport = SerialTransport(port=port, baudrate=baud, parity=parity)
-            transport.open()
+                transport = SerialTransport(port=port.strip(), baudrate=baud, parity=parity,
+                                            bytesize=8, stopbits=stopbits)
             guard = SafetyGuard()
             if allow_write:
                 guard.enable_writes(set(KNOWN_WRITABLE))
-            self.client = A650Client(transport=transport, slave=slave, guard=guard,
-                                     register_map=RegisterMap.load(),
-                                     audit_path=self.audit_path)
+            try:
+                transport.open()
+                client = A650Client(transport=transport, slave=slave, guard=guard,
+                                    register_map=RegisterMap.load(), timeout_s=timeout_s,
+                                    retries=retries, audit_path=self.audit_path)
+                # Opening a COM port alone does not prove communication with the drive.
+                client.read_registers(0x3000)
+                if self._closing:
+                    transport.close()
+                    return
+            except Exception:
+                transport.close()
+                raise
+            self.client = client
             return desc
 
+        def connected(desc):
+            self.connecting = False
+            if self._closing:
+                return
+            self.allow_write = allow_write
+            self.simulate = simulate
+            self.connected.emit(desc)
+
+        def failed(message):
+            self.connecting = False
+            self.allow_write = False
+            self.connectionFailed.emit(message)
+
         self._post(establish,
-                   on_success=lambda d: self.connected.emit(d),
-                   on_error=None)  # generic error signal fires anyway
+                   on_success=connected, on_error=failed)
 
     def disconnect_drive(self) -> None:
         for pid in list(self._timers):

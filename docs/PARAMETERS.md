@@ -1,5 +1,11 @@
 # Parameter Groups
 
+Сверка с официальным источником от 2026-11-14:
+[отчёт, исправления и оставшиеся неизвестные](PARAMETER_VERIFICATION.md).
+`min_value`, `max_value`, `default_value` в parameters.csv — значения на пульте
+в инженерных единицах. `scale=unknown` запрещает выводить из них сырые значения
+Modbus. Наличие строки в каталоге не разрешает её запись.
+
 ## Known groups
 
 | Group | Name | Notes |
@@ -41,15 +47,15 @@
 - F13.00 PID setpoint source
 - F13.01 digital PID setpoint
 - F13.02 PID feedback source
-- F13.03 PID feedback range
+- F13.03 PID reference range
 - F13.04 PID action direction
-- F13.05 PID filter time
+- F13.05 PID reference filter time
 
 ### Protection
 
 - F11.11 protection action 2
 - F11.12 protection action 3
-- F11.18/F11.19 overload threshold
+- F11.18 overload warning options; F11.19 overload warning threshold
 
 ### Pump/fire related
 

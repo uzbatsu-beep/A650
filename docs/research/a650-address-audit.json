@@ -1,0 +1,29 @@
+{
+  "catalog": "oni-studio-a650-extracted.json",
+  "records": 531,
+  "unique_codes": 530,
+  "findings": [
+    {
+      "kind": "address_mismatch",
+      "code": "F17.28",
+      "record_index": 419,
+      "code_va": "004fc950",
+      "actual": {
+        "ram": 4381,
+        "eeprom": 37149
+      },
+      "expected": {
+        "ram": 4380,
+        "eeprom": 37148
+      }
+    },
+    {
+      "kind": "duplicate_code",
+      "code": "F17.28",
+      "record_indices": [
+        418,
+        419
+      ]
+    }
+  ]
+}

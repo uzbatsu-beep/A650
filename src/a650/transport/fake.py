@@ -9,11 +9,9 @@ multi-invocation CLI flows (setfreq; start; status) behave like a real drive
 on the bus. Default session "cli" persists for the process lifetime; tests
 that need isolation pass their own session and reset it explicitly.
 
-State model is intentionally simplified; command-word semantics are only
-partially known (docs/REGISTERS.md):
-  * any command value with bit0 set (e.g. 0x0001) means "run forward";
-  * stop commands (e.g. 0x0005) have bit0 CLEAR — that is why we test b0
-    rather than "cmd != 0".
+State model is intentionally simplified: 0x0001 starts forward and 0x0005
+stops immediately (no deceleration curve). These are command codes, not bits.
+Other commands are currently unsupported by this simulator.
 """
 from __future__ import annotations
 
@@ -49,7 +47,7 @@ class FakeTransport:
         if not rtu.crc_ok(request):
             return b""  # corrupt request -> bus silence (timeout upstream)
         resp = self._handle(request)
-        if resp and len(resp) != expected_len:
+        if resp and not (resp[1] & rtu.EXC_BIT) and len(resp) != expected_len:
             raise AssertionError(
                 f"fake drive length mismatch: built {len(resp)} bytes, "
                 f"client expects {expected_len} for request {request.hex(' ')}"
@@ -66,6 +64,8 @@ class FakeTransport:
             return rtu.build_read_response(slave, values)
         if fc == rtu.FC_WRITE:
             addr, value = req[2] << 8 | req[3], req[4] << 8 | req[5]
+            if addr == 0x2000 and value not in (1, 5):
+                return rtu.build_exception(slave, fc, 0x03)
             self.registers[addr] = value
             self._apply_side_effects()
             return rtu.build_write_echo(slave, addr, value)
@@ -74,19 +74,19 @@ class FakeTransport:
     def _read(self, addr: int) -> int:
         if addr == 0x3000:  # output frequency: mirror setpoint when running fwd/rev
             cmd = self.registers.get(0x2000, 0)
-            return self.registers.get(0x2001, 0) if cmd & 0x0003 else 0
+            return self.registers.get(0x2001, 0) if cmd == 1 else 0
         if addr in (0x2100, 0x2101, 0x2102, 0x2103):  # status block
             return self._status_word(addr)
         return self.registers.get(addr, 0)
 
     def _status_word(self, addr: int) -> int:
         cmd = self.registers.get(0x2000, 0)
-        running_fwd = bool(cmd & 0x0001)   # manual example: start forward = 0x0001
-        running_rev = bool(cmd & 0x0002)   # reverse bit is a research TODO (unverified)
-        if addr == 0x2100:                 # drive state enum: 0 param, 1 run fwd, 2 run rev
-            return 1 if running_fwd else 2 if running_rev else 0
-        if addr == 0x2101:   # status bits: b0 = forward direction (simplified)
-            return 1 if running_fwd else 0
+        if addr == 0x2100:
+            return 1 if cmd == 1 else 4 if cmd == 5 else 0
+        if addr == 0x2101:
+            # Bits 2..3 = 10: command source is communication;
+            # direction bit 1 = 0: forward. No negative frequency in this model.
+            return 0x0008
         return 0             # no faults/warnings simulated
 
     def _apply_side_effects(self) -> None:

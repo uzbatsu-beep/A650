@@ -27,6 +27,15 @@
 
 ## Документация
 
+- [Разбор архива A650.zip: полезные материалы и противоречия](docs/ARCHIVE_REVIEW.md)
+
+- [Формат OniDriveStudio .ods и офлайн-чтение профилей](docs/ODS_FORMAT.md)
+
+- [Загруженные PDF и исследование OniDriveStudio EXE](docs/UPLOADED_MATERIALS.md)
+
+- [Сверка официальных параметров и русский экран подключения](docs/PARAMETER_VERIFICATION.md)
+
+- [План разработки, источники и статус проверки протокола](docs/DEVELOPMENT_PLAN.md)
 - [Protocol](docs/PROTOCOL.md)
 - [Registers](docs/REGISTERS.md)
 - [Parameters](docs/PARAMETERS.md)
