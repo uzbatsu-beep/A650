@@ -1,5 +1,7 @@
-"""Offline, read-only parameter catalog."""
+"""Typed offline projects, history and comparisons; no hardware writes."""
+from pathlib import Path
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QPlainTextEdit, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget, QSplitter, QFrame, QPushButton,
@@ -38,17 +40,31 @@ class CatalogView(QWidget):
         self.open_button = QPushButton("Открыть проект…")
         self.save_button = QPushButton("Сохранить проект…")
         self.compare_button = QPushButton("Сравнить с проектом…")
+        self.clear_compare_button = QPushButton("Закрыть сравнение")
+        self.clear_compare_button.setEnabled(False)
+        self.undo_button = QPushButton("Отменить")
+        self.redo_button = QPushButton("Повторить")
+        self.undo_button.setToolTip("Отменить изменение · Ctrl+Z")
+        self.redo_button.setToolTip("Повторить изменение · Ctrl+Shift+Z")
         self.project_status = QLabel("Офлайн-проект · нет несохранённых изменений")
         self.project_status.setObjectName("muted")
         actions.addWidget(self.open_button)
         actions.addWidget(self.save_button)
         actions.addWidget(self.compare_button)
+        actions.addWidget(self.clear_compare_button)
+        actions.addWidget(self.undo_button)
+        actions.addWidget(self.redo_button)
         actions.addStretch()
-        actions.addWidget(self.project_status)
         layout.addLayout(actions)
+        layout.addWidget(self.project_status)
         self.open_button.clicked.connect(self._open_project)
         self.save_button.clicked.connect(self._save_project)
         self.compare_button.clicked.connect(self._compare_project)
+        self.clear_compare_button.clicked.connect(self._clear_comparison)
+        self.undo_button.clicked.connect(lambda: self._history(False))
+        self.redo_button.clicked.connect(lambda: self._history(True))
+        QShortcut(QKeySequence.StandardKey.Undo, self, activated=lambda: self._history(False))
+        QShortcut(QKeySequence.StandardKey.Redo, self, activated=lambda: self._history(True))
         filters = QHBoxLayout()
         self.model = QComboBox()
         self.model.addItems(['A650', 'A650M'])
@@ -61,25 +77,28 @@ class CatalogView(QWidget):
             filters.addWidget(widget)
         self.editable_only = QCheckBox('Можно изменить офлайн')
         filters.addWidget(self.editable_only)
+        self.differences_only = QCheckBox('Только отличия')
+        self.differences_only.setEnabled(False)
+        filters.addWidget(self.differences_only)
         layout.addLayout(filters)
         warning = QLabel('Офлайн-проект: доступные поля можно изменить. Запись в ПЧ из таблицы отключена.')
         warning.setWordWrap(True)
         warning.setObjectName("notice")
         layout.addWidget(warning)
         self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(['Код', 'Название', 'RAM по EXE', 'Проверка', 'Проект', 'Сравнение'])
+        self.table.setHorizontalHeaderLabels(['Код', 'Название', 'Образец', 'Проверка', 'Проект', 'Сравнение'])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed)
         self.table.setItemDelegateForColumn(4, ProjectDelegate(self))
-        self.table.itemChanged.connect(self._item_changed)
+
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(42)
         self.table.setShowGrid(False)
         self.table.setAlternatingRowColors(False)
         self.table.setColumnWidth(0, 78)
-        self.table.setColumnWidth(2, 88)
+        self.table.setColumnWidth(2, 155)
         self.table.setColumnWidth(3, 135)
         self.table.setColumnWidth(4, 155)
         self.table.setColumnWidth(5, 100)
@@ -105,6 +124,7 @@ class CatalogView(QWidget):
         self.group.currentTextChanged.connect(self._render)
         self.search.textChanged.connect(self._render)
         self.editable_only.toggled.connect(self._render)
+        self.differences_only.toggled.connect(self._render)
         self.table.itemSelectionChanged.connect(self._show_detail)
         self._load(self.model.currentText())
 
@@ -117,6 +137,10 @@ class CatalogView(QWidget):
         self.group.addItem('Все группы')
         self.group.addItems(sorted({e.group for e in self.entries}))
         self.group.blockSignals(False)
+        self.differences_only.setEnabled(self.comparison is not None)
+        self.clear_compare_button.setEnabled(self.comparison is not None)
+        if self.comparison is None:
+            self.differences_only.setChecked(False)
         self._update_project_status()
         self._render()
 
@@ -125,7 +149,14 @@ class CatalogView(QWidget):
 
     def _update_project_status(self):
         model = self.model.currentText()
-        count = len(self.projects[model].values)
+        project = self.projects[model]
+        if project.dirty:
+            self.unsaved.add(model)
+        else:
+            self.unsaved.discard(model)
+        self.undo_button.setEnabled(project.can_undo)
+        self.redo_button.setEnabled(project.can_redo)
+        count = len(project.values)
         state = "есть несохранённые изменения" if model in self.unsaved else "сохранено"
         self.project_status.setText(f"Офлайн-проект {model} · {count} знач. · {state}")
 
@@ -153,8 +184,18 @@ class CatalogView(QWidget):
             QMessageBox.warning(self, "Не удалось сравнить", str(exc))
             return
         self.comparison = project
+        self.clear_compare_button.setEnabled(True)
+        self.differences_only.setEnabled(True)
         self._render()
-        self.project_status.setText("Сравнение с другим офлайн-проектом · значения ПЧ не считаны")
+        self.compare_button.setToolTip(f'Образец: {Path(path).name}')
+
+    def _clear_comparison(self):
+        self.comparison = None
+        self.clear_compare_button.setEnabled(False)
+        self.differences_only.setEnabled(False)
+        self.differences_only.setChecked(False)
+        self._render()
+        self._update_project_status()
 
     def _open_project(self):
         path, _ = QFileDialog.getOpenFileName(self, "Открыть офлайн-проект", "", "Проект A650 (*.a650.json *.json)")
@@ -181,14 +222,22 @@ class CatalogView(QWidget):
             self._update_project_status()
 
     def _render(self, *_):
+        selected = self.table.currentRow()
+        selected_key = None
+        if 0 <= selected < len(self.visible_entries):
+            entry = self.visible_entries[selected]
+            selected_key = (entry.code, entry.source_location)
         self._rendering = True
         self.visible_entries = search_catalog(self.entries, self.search.text(), self.group.currentText())
         if self.editable_only.isChecked():
             self.visible_entries = tuple(entry for entry in self.visible_entries
                 if (entry.code in ENUMS or entry.code in DECIMALS)
                 and not entry.duplicate and not entry.conflict)
-        self.table.setRowCount(len(self.visible_entries))
         project = self.projects[self.model.currentText()]
+        if self.differences_only.isChecked() and self.comparison is not None:
+            self.visible_entries = tuple(e for e in self.visible_entries
+                if project.values.get(e.code) != self.comparison.values.get(e.code))
+        self.table.setRowCount(len(self.visible_entries))
         for row, entry in enumerate(self.visible_entries):
             status = 'Конфликт' if entry.conflict else 'Дубликат' if entry.duplicate else 'Не проверено на ПЧ'
             if entry.conflict and entry.duplicate:
@@ -203,33 +252,60 @@ class CatalogView(QWidget):
             else:
                 display = f'{value.replace(".", ",")} {UNITS[entry.code]}'
             other = self.comparison.values.get(entry.code) if self.comparison else None
-            if other is None or value is None:
-                comparison = 'Не задано' if self.comparison else 'Не выбрано'
+            if self.comparison is None:
+                comparison = 'Не выбрано'
+            elif value is None and other is None:
+                comparison = 'Нет в обоих'
+            elif value is None:
+                comparison = 'Только в образце'
+            elif other is None:
+                comparison = 'Только в проекте'
             elif other == value:
                 comparison = 'Совпадает'
             else:
-                comparison = f'Было: {other}'
-            for col, text in enumerate((entry.code, entry.name, address(entry.ram), status, display, comparison)):
+                comparison = 'Отличается'
+            sample = self._display_value(entry.code, other) if self.comparison else '—'
+            for col, text in enumerate((entry.code, entry.name, sample, status, display, comparison)):
                 item = QTableWidgetItem(text)
+                item.setToolTip(text)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 if col == 4 and editable and not entry.duplicate and not entry.conflict:
                     item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
                     item.setData(ProjectDelegate.CODE_ROLE, entry.code)
                     item.setData(ProjectDelegate.VALUE_ROLE, value)
+                if col == 5 and self.comparison is not None:
+                    item.setToolTip(f'Образец: {self._display_value(entry.code, other)}\nПроект: {self._display_value(entry.code, value)}')
                 self.table.setItem(row, col, item)
         self._rendering = False
         self.detail.clear()
+        if selected_key:
+            for row, entry in enumerate(self.visible_entries):
+                if (entry.code, entry.source_location) == selected_key:
+                    self.table.selectRow(row)
+                    self._show_detail()
+                    break
 
-    def _item_changed(self, item):
-        if self._rendering or item.column() != 4:
-            return
-        code, value = item.data(ProjectDelegate.CODE_ROLE), item.data(ProjectDelegate.VALUE_ROLE)
-        if code is not None and value is not None:
-            self.projects[self.model.currentText()].set(code, value)
-            self.unsaved.add(self.model.currentText())
-            self._update_project_status()
-            if self.comparison is not None:
-                self._render()
+    @staticmethod
+    def _display_value(code, value):
+        if value is None:
+            return 'Не задано'
+        if code in ENUMS:
+            return f'{value} — {ENUMS[code].get(value, "Неизвестное значение")}'
+        return f'{str(value).replace(".", ",")} {UNITS.get(code, "")}'.strip()
+
+    def commit_edit(self, code, value):
+        self.projects[self.model.currentText()].set(code, value)
+        self._update_project_status()
+        self._render()
+
+    def _history(self, redo):
+        project = self.projects[self.model.currentText()]
+        if redo:
+            project.redo()
+        else:
+            project.undo()
+        self._update_project_status()
+        self._render()
 
     def _show_detail(self):
         row = self.table.currentRow()
@@ -237,7 +313,11 @@ class CatalogView(QWidget):
             self.detail.clear()
             return
         entry = self.visible_entries[row]
-        conflicts = []
+        project_value = self.projects[self.model.currentText()].values.get(entry.code)
+        conflicts = [f'Проект: {self._display_value(entry.code, project_value)}']
+        if self.comparison is not None:
+            other = self.comparison.values.get(entry.code)
+            conflicts.append(f'Образец: {self._display_value(entry.code, other)}')
         if entry.duplicate:
             conflicts.append('Код повторяется в исходном каталоге EXE.')
         if entry.conflict:

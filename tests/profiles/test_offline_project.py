@@ -57,3 +57,49 @@ def test_verified_offline_values(code, value, expected):
 def test_rejects_out_of_range_values(code, value):
     with pytest.raises(ValueError):
         validate(code, value)
+
+
+def test_history_tracks_saved_point_and_preserves_unknown_enum(tmp_path):
+    project = OfflineProject('A650', {'F15.01': 9})
+    assert not project.dirty
+    project.set('F15.01', 1)
+    assert project.dirty and project.can_undo
+    project.undo()
+    assert project.values['F15.01'] == 9 and not project.dirty
+    project.redo()
+    path = tmp_path / 'saved.json'
+    project.save(path)
+    assert not project.dirty
+    project.undo()
+    assert project.dirty and project.values['F15.01'] == 9
+    project.redo()
+    assert not project.dirty
+
+
+def test_noop_and_invalid_edit_do_not_destroy_redo():
+    project = OfflineProject('A650')
+    project.set('F15.01', 1)
+    project.set('F15.01', 2)
+    project.undo()
+    project.set('F15.01', 1)
+    with pytest.raises(ValueError):
+        project.set('F15.01', 100)
+    assert project.can_redo
+    project.set('F15.01', 3)
+    assert not project.can_redo
+
+
+def test_failed_atomic_save_keeps_dirty_and_original_file(tmp_path, monkeypatch):
+    import a650.a650lib.offline_project as module
+    project = OfflineProject('A650')
+    path = tmp_path / 'project.json'
+    project.save(path)
+    original = path.read_bytes()
+    project.set('F15.01', 1)
+    def fail(*args):
+        raise OSError('disk unavailable')
+    monkeypatch.setattr(module.os, 'replace', fail)
+    with pytest.raises(OSError):
+        project.save(path)
+    assert project.dirty and path.read_bytes() == original
+    assert list(tmp_path.iterdir()) == [path]

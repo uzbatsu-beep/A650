@@ -42,6 +42,6 @@ class ProjectDelegate(QStyledItemDelegate):
         except ValueError as exc:
             self.parent().show_validation(str(exc))
             return
-        model.setData(index, value, self.VALUE_ROLE)
-        model.setData(index, f'{value} — {ENUMS[code][value]}' if code in ENUMS
-                      else f'{value.replace(".", ",")} {UNITS[code]}', Qt.ItemDataRole.DisplayRole)
+        # Commit once through the project, never through two itemChanged signals:
+        # filtering or comparison can otherwise replace the edited row mid-commit.
+        self.parent().commit_edit(code, value)

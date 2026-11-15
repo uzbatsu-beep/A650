@@ -57,6 +57,9 @@ def validate(code, value):
 class OfflineProject:
     model: str
     values: dict = field(default_factory=dict)
+    _undo: list = field(default_factory=list, init=False, repr=False)
+    _redo: list = field(default_factory=list, init=False, repr=False)
+    _saved: dict = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self):
         if self.model not in ('A650', 'A650M'):
@@ -72,9 +75,37 @@ class OfflineProject:
             else:
                 checked[code] = validate(code, value)
         self.values = checked
+        self._saved = checked.copy()
+
+    @property
+    def dirty(self):
+        return self.values != self._saved
+
+    @property
+    def can_undo(self):
+        return bool(self._undo)
+
+    @property
+    def can_redo(self):
+        return bool(self._redo)
 
     def set(self, code, value):
-        self.values[code] = validate(code, value)
+        value = validate(code, value)
+        if self.values.get(code) == value:
+            return
+        self._undo.append(self.values.copy())
+        self._redo.clear()
+        self.values[code] = value
+
+    def undo(self):
+        if self._undo:
+            self._redo.append(self.values.copy())
+            self.values = self._undo.pop()
+
+    def redo(self):
+        if self._redo:
+            self._undo.append(self.values.copy())
+            self.values = self._redo.pop()
 
     def save(self, path):
         path = Path(path)
@@ -88,6 +119,7 @@ class OfflineProject:
                 json.dump(payload, output, ensure_ascii=False, indent=2)
                 output.write('\n')
             os.replace(temporary, path)
+            self._saved = self.values.copy()
         finally:
             if temporary and os.path.exists(temporary):
                 os.unlink(temporary)
