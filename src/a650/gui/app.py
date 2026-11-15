@@ -37,8 +37,8 @@ def _load_map() -> RegisterMap:
 class MainWindow(QMainWindow):
     def __init__(self, controller: DriveController | None = None) -> None:
         super().__init__()
-        self.setWindowTitle("ONI A650 Configurator — prototype")
-        self.resize(1000, 680)
+        self.setWindowTitle("Конфигуратор ONI A650 — прототип")
+        self.resize(1180, 850)
         self.ctrl = controller or DriveController(self)
         self.map = _load_map()
 
@@ -63,7 +63,7 @@ class MainWindow(QMainWindow):
         left_wrap.addLayout(left)
         left_widget = QWidget()
         left_widget.setLayout(left_wrap)
-        left_widget.setMaximumWidth(360)
+        left_widget.setMaximumWidth(460)
         right_widget = QWidget()
         right_widget.setLayout(right)
         splitter_row.addWidget(left_widget)
@@ -74,13 +74,14 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         bar = self.statusBar()
-        self.lbl_bus = QLabel("offline")
+        self.lbl_bus = QLabel("Нет подключения")
         bar.addPermanentWidget(self.lbl_bus)
 
         # -- wiring -----------------------------------------------------------
         self.conn_panel.connectRequested.connect(self._on_connect)
         self.conn_panel.disconnectRequested.connect(self._on_disconnect)
         self.ctrl.connected.connect(self._on_connected)
+        self.ctrl.connectionFailed.connect(self._on_connection_failed)
         self.ctrl.disconnected.connect(self._on_disconnected)
         self.ctrl.error.connect(lambda m: self.log.append(f"ERROR {m}"))
 
@@ -92,14 +93,18 @@ class MainWindow(QMainWindow):
     # -- connection --------------------------------------------------------------
 
     def _on_connect(self, kwargs: dict) -> None:
-        self.lbl_bus.setText("connecting…")
+        self.lbl_bus.setText("Проверка связи…")
         self.ctrl.connect_drive(**kwargs)
+
+    def _on_connection_failed(self, message: str) -> None:
+        self.conn_panel.connection_failed(message)
+        self.lbl_bus.setText("Нет подключения")
 
     def _on_connected(self, desc: str) -> None:
         self.conn_panel.set_connected(True)
         self.lbl_bus.setText(desc)
-        self.log.append(f"connected: {desc}"
-                       + (" [writes ENABLED]" if self.ctrl.allow_write else " [read-only]"))
+        self.log.append(f"Подключено: {desc}"
+                       + (" [запись разрешена]" if self.ctrl.allow_write else " [только чтение]"))
         self.control.set_enabled(self.ctrl.allow_write)
         # live polling: status block + output frequency every 500 ms
         self.ctrl.start_poll("status", 500, self._poll_status, self._show_status)
@@ -130,15 +135,14 @@ class MainWindow(QMainWindow):
         self.conn_panel.set_connected(False)
         self.control.set_enabled(False)
         self.status_card.show_state(None)
-        self.lbl_bus.setText("offline")
-        self.log.append("disconnected")
+        self.lbl_bus.setText("Нет подключения")
+        self.log.append("Отключено")
 
     # -- safety gate -----------------------------------------------------------------
 
     def _confirm_write(self, what: str) -> bool:
         """Simulated drive needs no dialog; real hardware always asks."""
-        simulate = "SIMULATED" in self.lbl_bus.text()
-        if simulate:
+        if self.ctrl.simulate:
             return True
         resp = QMessageBox.question(
             self, "Write to drive",

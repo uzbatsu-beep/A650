@@ -17,7 +17,7 @@ FC_READ = 0x03
 FC_WRITE = 0x06
 EXC_BIT = 0x80
 
-# Exception codes documented for the A650 (docs/PROTOCOL.md sec. 6)
+# Standard Modbus exception names; device-specific behavior needs verification.
 EXCEPTION_NAMES = {
     0x01: "Illegal function",
     0x02: "Illegal data address",
@@ -33,6 +33,14 @@ class ReadRegistersRequest:
     slave: int
     address: int
     count: int
+
+    def __post_init__(self):
+        if not 1 <= self.slave <= 247:
+            raise ValueError(f"slave out of unicast range: {self.slave}")
+        if not 1 <= self.count <= 8:
+            raise ValueError("A650 reads require 1 to 8 registers per request")
+        if not 0 <= self.address <= 0xFFFF or self.address + self.count > 0x10000:
+            raise ValueError("read range outside uint16 register space")
 
     def to_bytes(self) -> bytes:
         return append_crc(
@@ -80,23 +88,36 @@ class ExceptionResponse:
         return EXCEPTION_NAMES.get(self.code, f"Unknown exception 0x{self.code:02X}")
 
 
-def parse_response(frame: bytes, expected_slave: int | None = None) -> ReadRegistersResponse | ExceptionResponse:
+def parse_response(frame: bytes, expected_slave: int | None = None,
+                   expected_function: int | None = None) -> ReadRegistersResponse | ExceptionResponse:
     """Parse a complete RTU response frame (with CRC)."""
+    if len(frame) < 5:
+        raise ValueError("truncated response")
     if not check_crc(frame):
         raise ValueError("bad CRC")
     slave, fc = frame[0], frame[1]
     if expected_slave is not None and slave != expected_slave:
         raise ValueError(f"slave mismatch: got {slave:#02x}, expected {expected_slave:#02x}")
+    if expected_function is not None and (fc & ~EXC_BIT) != expected_function:
+        raise ValueError("function mismatch between request and response")
     if fc & EXC_BIT:
+        if len(frame) != 5:
+            raise ValueError("invalid exception response length")
         return ExceptionResponse(function=fc & ~EXC_BIT, code=frame[2])
     if fc == FC_READ:
         byte_count = frame[2]
+        if byte_count == 0 or byte_count % 2:
+            raise ValueError("invalid read byte count")
+        if len(frame) != byte_count + 5:
+            raise ValueError("invalid read response length")
         data = frame[3:3 + byte_count]
         if len(data) != byte_count:
             raise ValueError("truncated read response")
         values = tuple(int.from_bytes(data[i:i + 2], "big") for i in range(0, byte_count, 2))
         return ReadRegistersResponse(values=values)
     if fc == FC_WRITE:
+        if len(frame) != 8:
+            raise ValueError("invalid write response length")
         # FC06 echoes the request; validated by callers against the sent request.
         address = int.from_bytes(frame[2:4], "big")
         value = int.from_bytes(frame[4:6], "big")

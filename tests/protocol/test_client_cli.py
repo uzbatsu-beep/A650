@@ -68,6 +68,35 @@ def test_client_timeout_becomes_drive_error():
         c.read_registers(0x3000)
 
 
+def test_stop_is_a_command_code_not_a_run_bit():
+    transport = FakeTransport()
+    transport.open()
+    client = A650Client(transport)
+    client.guard.enable_writes({0x2000, 0x2001})
+    client.set_frequency_hz(30)
+    client.start_forward()
+    assert client.output_frequency_hz() == 30
+    assert client.status()["state"] == 1
+    assert client.status()["status_bits"] & 2 == 0
+    client.stop()
+    assert client.output_frequency_hz() == 0
+    assert client.status()["state"] == 4
+    client.set_frequency_hz(15)
+    assert client.output_frequency_hz() == 0
+    client.start_forward()
+    assert client.output_frequency_hz() == 15
+
+
+def test_unsupported_simulator_command_returns_modbus_exception():
+    transport = FakeTransport()
+    transport.open()
+    client = A650Client(transport)
+    client.guard.enable_writes({0x2000})
+    with pytest.raises(DriveError, match="Modbus exception 0x03"):
+        client.write_register(0x2000, 2)
+    assert client.status()["state"] == 0
+
+
 def test_fake_rejects_bad_crc():
     t = FakeTransport()
     t.open()
@@ -79,7 +108,7 @@ def test_fake_rejects_bad_crc():
 def test_cli_map_lists_registers(capsys):
     assert run_cli("map") == 0
     out = capsys.readouterr().out
-    assert "0x2000" in out and "confidence=medium" in out
+    assert "0x2000" in out and "confidence=high" in out
 
 
 def test_cli_read_engineering_units(capsys):

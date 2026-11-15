@@ -33,6 +33,10 @@ class DriveError(RuntimeError):
     pass
 
 
+class WriteOutcomeUnknown(DriveError):
+    """The drive may have executed a write whose acknowledgement was lost."""
+
+
 class A650Client:
     def __init__(self, transport: Transport, slave: int = 1,
                  guard: SafetyGuard | None = None,
@@ -40,6 +44,10 @@ class A650Client:
                  timeout_s: float = 0.5, retries: int = 2,
                  audit_path: Path | str | None = None) -> None:
         self.transport = transport
+        if not 1 <= slave <= 247:
+            raise ValueError("slave must be a unicast address from 1 to 247")
+        if timeout_s <= 0 or retries < 0:
+            raise ValueError("timeout must be positive and retries nonnegative")
         self.slave = slave
         self.guard = guard or SafetyGuard()
         self.map = register_map or RegisterMap.load()
@@ -49,9 +57,10 @@ class A650Client:
 
     # -- low level ----------------------------------------------------------
 
-    def _request(self, frame: bytes) -> bytes:
+    def _request(self, frame: bytes, *, retry: bool = True) -> bytes:
         last_exc: Exception | None = None
-        for attempt in range(self.retries + 1):
+        attempts = self.retries + 1 if retry else 1
+        for attempt in range(attempts):
             try:
                 resp = self.transport.exchange(
                     frame, expected_response_len(frame), self.timeout_s
@@ -59,12 +68,21 @@ class A650Client:
                 return resp
             except TimeoutError as exc:
                 last_exc = exc
-                if attempt < self.retries:
+                if attempt + 1 < attempts:
                     time.sleep(0.05)
-        raise DriveError(f"drive did not answer after {self.retries + 1} attempts: {last_exc}")
+        if not retry:
+            raise WriteOutcomeUnknown(
+                "write acknowledgement timed out; outcome unknown; command was not retried. "
+                "Check drive state before issuing another command."
+            ) from last_exc
+        raise DriveError(f"drive did not answer after {attempts} attempts: {last_exc}")
 
     def _parse(self, resp: bytes, request: bytes) -> ReadRegistersResponse | ExceptionResponse:
-        parsed = parse_response(resp, expected_slave=self.slave)
+        try:
+            parsed = parse_response(resp, expected_slave=self.slave,
+                                    expected_function=request[1])
+        except ValueError as exc:
+            raise DriveError(f"invalid drive response: {exc}") from exc
         if isinstance(parsed, ExceptionResponse):
             raise DriveError(
                 f"Modbus exception 0x{parsed.code:02X} ({parsed.name}) "
@@ -78,7 +96,8 @@ class A650Client:
         req = ReadRegistersRequest(slave=self.slave, address=address, count=count)
         frame = req.to_bytes()
         parsed = self._parse(self._request(frame), frame)
-        assert isinstance(parsed, ReadRegistersResponse)
+        if not isinstance(parsed, ReadRegistersResponse) or len(parsed.values) != count:
+            raise DriveError(f"read response does not contain the requested {count} registers")
         return parsed.values
 
     def read_engineering(self, address: int) -> tuple[int, object]:
@@ -91,7 +110,7 @@ class A650Client:
         self.guard.check_write(self.slave, address, value)
         req = WriteRegisterRequest(slave=self.slave, address=address, value=value)
         frame = req.to_bytes()
-        parsed = self._parse(self._request(frame), frame)
+        parsed = self._parse(self._request(frame, retry=False), frame)
         echo_addr, echo_val = parsed.values  # type: ignore[misc]
         if (echo_addr, echo_val) != (address, value):
             raise DriveError(

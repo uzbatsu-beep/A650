@@ -59,7 +59,7 @@ def test_connect_simulated_emits_connected(ctrl):
     ctrl.connected.connect(got.append)
     ctrl.connect_drive(simulate=True, allow_write=True)
     wait_until(lambda: bool(got))
-    assert got[0] == "SIMULATED drive"
+    assert got[0] == "Симулятор ПЧ"
     assert ctrl.is_connected
 
 

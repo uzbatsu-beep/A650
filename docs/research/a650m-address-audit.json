@@ -1,0 +1,169 @@
+{
+  "catalog": "oni-studio-a650m-extracted.json",
+  "records": 617,
+  "unique_codes": 616,
+  "findings": [
+    {
+      "kind": "address_mismatch",
+      "code": "F17.28",
+      "record_index": 427,
+      "code_va": "00466403",
+      "actual": {
+        "ram": 4381,
+        "eeprom": 37149
+      },
+      "expected": {
+        "ram": 4380,
+        "eeprom": 37148
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.08",
+      "record_index": 434,
+      "code_va": "004668f6",
+      "actual": {
+        "ram": 4614,
+        "eeprom": 37382
+      },
+      "expected": {
+        "ram": 4616,
+        "eeprom": 37384
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.09",
+      "record_index": 435,
+      "code_va": "00466990",
+      "actual": {
+        "ram": 4615,
+        "eeprom": 37383
+      },
+      "expected": {
+        "ram": 4617,
+        "eeprom": 37385
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.10",
+      "record_index": 436,
+      "code_va": "00466a2a",
+      "actual": {
+        "ram": 4616,
+        "eeprom": 37384
+      },
+      "expected": {
+        "ram": 4618,
+        "eeprom": 37386
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.11",
+      "record_index": 437,
+      "code_va": "00466ac4",
+      "actual": {
+        "ram": 4617,
+        "eeprom": 37385
+      },
+      "expected": {
+        "ram": 4619,
+        "eeprom": 37387
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.12",
+      "record_index": 438,
+      "code_va": "00466b5e",
+      "actual": {
+        "ram": 4618,
+        "eeprom": 37386
+      },
+      "expected": {
+        "ram": 4620,
+        "eeprom": 37388
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.13",
+      "record_index": 439,
+      "code_va": "00466bf8",
+      "actual": {
+        "ram": 4619,
+        "eeprom": 37387
+      },
+      "expected": {
+        "ram": 4621,
+        "eeprom": 37389
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.14",
+      "record_index": 440,
+      "code_va": "00466c92",
+      "actual": {
+        "ram": 4620,
+        "eeprom": 37388
+      },
+      "expected": {
+        "ram": 4622,
+        "eeprom": 37390
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.15",
+      "record_index": 441,
+      "code_va": "00466d2c",
+      "actual": {
+        "ram": 4621,
+        "eeprom": 37389
+      },
+      "expected": {
+        "ram": 4623,
+        "eeprom": 37391
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.21",
+      "record_index": 442,
+      "code_va": "00466dc6",
+      "actual": {
+        "ram": 4627,
+        "eeprom": 37395
+      },
+      "expected": {
+        "ram": 4629,
+        "eeprom": 37397
+      }
+    },
+    {
+      "kind": "address_mismatch",
+      "code": "F18.30",
+      "record_index": 443,
+      "code_va": "00466e60",
+      "actual": {
+        "ram": 4636,
+        "eeprom": 37404
+      },
+      "expected": {
+        "ram": 4638,
+        "eeprom": 37406
+      }
+    },
+    {
+      "kind": "duplicate_code",
+      "code": "F17.28",
+      "record_indices": [
+        426,
+        427
+      ]
+    }
+  ]
+}

@@ -31,11 +31,10 @@ def test_setpoint_limits(rmap):
 
 def test_confidence_flags_present(rmap):
     # Flags must match data/registers.csv: 0x2001 comes from a CRC-verified
-    # manual example (high); 0x2000 has an incomplete bit map (medium);
-    # 0x2005 has unconfirmed access direction (low).
+    # edition 3 confirms command enumeration and AO access too.
     assert rmap.get(0x2001).confidence == "high"
-    assert rmap.get(0x2000).confidence == "medium"
-    assert rmap.get(0x2005).confidence == "low"
+    assert rmap.get(0x2000).confidence == "high"
+    assert rmap.get(0x2005).confidence == "high"
 
 
 def test_unknown_address(rmap):

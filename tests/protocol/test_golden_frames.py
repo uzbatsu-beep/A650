@@ -15,7 +15,7 @@ CASES = {
     "set_frequency_30hz": WriteRegisterRequest(slave=1, address=0x2001, value=3000),
     "start_forward": WriteRegisterRequest(slave=1, address=0x2000, value=0x0001),
     "stop_deceleration": WriteRegisterRequest(slave=1, address=0x2000, value=0x0005),
-    "error_read_only": WriteRegisterRequest(slave=1, address=0x3000, value=0x0000),
+    "error_read_only": WriteRegisterRequest(slave=1, address=0x3000, value=5000),
 }
 
 

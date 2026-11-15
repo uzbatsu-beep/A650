@@ -22,7 +22,9 @@ PANEL = "#22272e"
 FG = "#e6edf3"
 MUTED = "#8b949e"
 
-STATE_NAMES = {0: "STOPPED", 1: "RUN FWD", 2: "RUN REV"}
+STATE_NAMES = {0: "Настройка параметров", 1: "Работа", 2: "Толчковый режим",
+               3: "Обучение", 4: "Останов", 5: "Останов толчкового режима",
+               6: "Неисправность"}
 
 
 def style_app() -> str:
@@ -65,83 +67,123 @@ def style_app() -> str:
 
 
 class ConnectionPanel(QGroupBox):
-    """Port / simulate selector + connect button. Emits connectRequested."""
+    """Connection settings; emits validated controller keyword arguments."""
 
-    connectRequested = Signal(dict)     # kwargs for DriveController.connect_drive
+    connectRequested = Signal(dict)
     disconnectRequested = Signal()
 
     def __init__(self, parent=None) -> None:
-        super().__init__("Connection", parent)
+        super().__init__("Подключение к ПЧ", parent)
         self._connected = False
-        form = QFormLayout()
+        self._busy = False
+        form = QFormLayout(self)
         self.mode = QComboBox()
-        self.mode.addItems(["SIMULATED drive (no hardware)", "Serial port (RS-485)"])
+        self.mode.addItems(["Симулятор (без оборудования)", "Последовательный порт RS-485"])
         self.port = QComboBox()
         self.port.setEditable(True)
-        self.refresh_ports()
+        self.port.lineEdit().setPlaceholderText("Выберите порт или введите COM3")
         self.baud = QComboBox()
-        self.baud.addItems(["9600", "19200", "38400", "57600", "115200"])
+        self.baud.addItems(["4800", "9600", "19200", "38400", "57600", "115200"])
         self.baud.setCurrentText("9600")
+        self.parity = QComboBox()
+        for text, value in [("Нет (N)", "N"), ("Чётная (E)", "E"), ("Нечётная (O)", "O")]:
+            self.parity.addItem(text, value)
+        self.stopbits = QComboBox()
+        self.stopbits.addItems(["1", "2"])
         self.slave = QSpinBox(minimum=1, maximum=247, value=1)
-        self.allow_write = QCheckBox("Enable writes (whitelist 0x2000/0x2001)")
-        self.allow_write.setToolTip(
-            "Mirrors CLI --allow-write. Writes still go through SafetyGuard "
-            "and are recorded in ~/.a650/audit.jsonl")
-        row = QHBoxLayout()
-        self.btn_refresh = QPushButton("Refresh ports")
+        self.timeout = QDoubleSpinBox()
+        self.timeout.setRange(0.1, 10.0)
+        self.timeout.setDecimals(2)
+        self.timeout.setSingleStep(0.1)
+        self.timeout.setValue(0.5)
+        self.timeout.setSuffix(" с")
+        self.retries = QSpinBox(minimum=0, maximum=3, value=2)
+        self.retries.setToolTip("Дополнительные попытки чтения. Запись автоматически не повторяется.")
+        self.allow_write = QCheckBox("Разрешить запись и управление")
+        self.allow_write.setToolTip("Только известные команды пуска, останова и задания частоты. По умолчанию — чтение.")
+        self.btn_refresh = QPushButton("Обновить порты")
         self.btn_refresh.clicked.connect(self.refresh_ports)
-        row.addWidget(self.btn_refresh)
-        self.btn_connect = QPushButton("Connect")
+        self.btn_connect = QPushButton("Подключиться")
         self.btn_connect.setObjectName("primary")
         self.btn_connect.clicked.connect(self._on_connect)
-        row.addWidget(self.btn_connect)
-        form.addRow("Mode:", self.mode)
-        form.addRow("Port:", self.port)
-        form.addRow("Baud:", self.baud)
-        form.addRow("Slave:", self.slave)
-        form.addRow("", self.allow_write)
-        form.addRow(row)
-        self.setLayout(form)
+        self.message = QLabel()
+        self.message.setWordWrap(True)
+        self.message.setStyleSheet("color: #e3b341; font-size: 12px;")
+        hint = QLabel("Настройки должны совпадать с F15 на пульте ПЧ. "
+                      "При подключении выполняется только чтение.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color: {MUTED}; font-size: 12px;")
+        for label, widget in [("Режим:", self.mode), ("Порт:", self.port),
+                              ("Скорость, бод:", self.baud), ("Чётность:", self.parity),
+                              ("Биты данных:", QLabel("8 (Modbus RTU)")),
+                              ("Стоповые биты:", self.stopbits), ("Адрес ПЧ:", self.slave),
+                              ("Тайм-аут ответа:", self.timeout), ("Повторы чтения:", self.retries)]:
+            form.addRow(label, widget)
+        form.addRow(self.allow_write)
+        form.addRow(hint)
+        form.addRow(self.message)
+        form.addRow(self.btn_refresh)
+        form.addRow(self.btn_connect)
         self.mode.currentIndexChanged.connect(self._update_enabled)
+        self.refresh_ports()
         self._update_enabled()
 
     def refresh_ports(self) -> None:
         from .controller import list_serial_ports
-        current = self.port.currentText()
+        current = self.port.currentText().strip()
         self.port.clear()
-        ports = list_serial_ports()
-        self.port.addItems(ports or ["(none found — type COM/tty manually)"])
+        self.port.addItems(list_serial_ports())
         if current:
             self.port.setCurrentText(current)
 
     def _update_enabled(self) -> None:
+        unlocked = not (self._connected or self._busy)
         serial_mode = self.mode.currentIndex() == 1
-        for w in (self.port, self.baud, self.btn_refresh):
-            w.setEnabled(serial_mode and not self._connected)
-        self.mode.setEnabled(not self._connected)
-        self.slave.setEnabled(not self._connected)
-        self.allow_write.setEnabled(not self._connected)
+        for widget in (self.port, self.baud, self.parity, self.stopbits, self.btn_refresh):
+            widget.setEnabled(serial_mode and unlocked)
+        for widget in (self.mode, self.slave, self.timeout, self.retries, self.allow_write):
+            widget.setEnabled(unlocked)
+        self.btn_connect.setEnabled(not self._busy)
 
     def _on_connect(self) -> None:
+        if self._busy:
+            return
         if self._connected:
             self.disconnectRequested.emit()
             return
+        simulate = self.mode.currentIndex() == 0
+        port = self.port.currentText().strip()
+        parity = self.parity.currentData()
+        stopbits = int(self.stopbits.currentText())
+        if not simulate and not port:
+            self.message.setText("Укажите COM-порт. Если его нет в списке, введите имя вручную.")
+            return
+        if not simulate and parity != "N" and stopbits != 1:
+            self.message.setText("Для чётной и нечётной чётности выберите 1 стоповый бит (F15.01).")
+            return
+        self.message.clear()
+        self.set_busy(True)
         self.connectRequested.emit({
-            "simulate": self.mode.currentIndex() == 0,
-            "port": self.port.currentText(),
-            "baud": int(self.baud.currentText()),
-            "slave": self.slave.value(),
-            "allow_write": self.allow_write.isChecked(),
+            "simulate": simulate, "port": port,
+            "baud": int(self.baud.currentText()), "parity": parity, "stopbits": stopbits,
+            "slave": self.slave.value(), "timeout_s": self.timeout.value(),
+            "retries": self.retries.value(), "allow_write": self.allow_write.isChecked(),
         })
+
+    def set_busy(self, on: bool) -> None:
+        self._busy = on
+        self.btn_connect.setText("Проверка связи…" if on else
+                                 "Отключиться" if self._connected else "Подключиться")
+        self._update_enabled()
 
     def set_connected(self, on: bool, desc: str = "") -> None:
         self._connected = on
-        self.btn_connect.setText("Disconnect" if on else "Connect")
-        self.btn_connect.setObjectName("" if on else "primary")
-        self.allow_write.setEnabled(not on)
-        self._update_enabled()
-        if on:
-            self.allow_write.setChecked(self.allow_write.isChecked())
+        self.set_busy(False)
+        self.message.clear()
+
+    def connection_failed(self, message: str) -> None:
+        self.set_connected(False)
+        self.message.setText("Не удалось подключиться. Проверьте порт и настройки ПЧ. " + message)
 
     def set_write_checked(self, checked: bool) -> None:
         self.allow_write.setChecked(checked)
@@ -230,11 +272,13 @@ class StatusCard(QGroupBox):
             return
         code = st.get("state", 0)
         name = STATE_NAMES.get(code, f"CODE {code}")
+        if code in (1, 2):
+            name += " · назад" if st.get("status_bits", 0) & 2 else " · вперёд"
         fault = st.get("fault_code", 0)
         if fault:
             name = f"FAULT Err{fault:02d}"
             self.state_lbl.setObjectName("stateFault")
-        elif code in (1, 2):
+        elif code in (1, 2, 3):
             self.state_lbl.setObjectName("stateRun")
         else:
             self.state_lbl.setObjectName("stateStopped")
@@ -299,7 +343,7 @@ class RegisterInspector(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         top = QHBoxLayout()
         self.addr_edit = QLineEdit("0x3000")
-        self.count_spin = QSpinBox(minimum=1, maximum=16, value=1)
+        self.count_spin = QSpinBox(minimum=1, maximum=8, value=1)
         btn_read = QPushButton("Read")
         btn_read.clicked.connect(self._read_clicked)
         top.addWidget(QLabel("Address:"))
