@@ -93,3 +93,41 @@ def test_compare_file_reports_difference_without_changing_project(app, tmp_path,
         assert view.table.item(0, 5).text() == 'Не задано'
     finally:
         view.close()
+
+
+def test_unknown_enum_round_trip_is_visible_and_not_replaced(app):
+    from a650.a650lib.offline_project import OfflineProject
+    view = CatalogView()
+    try:
+        view.projects['A650'] = OfflineProject('A650', {'F15.01': 9})
+        view.search.setText('F15.01')
+        item = view.table.item(0, 4)
+        assert 'Неизвестное значение (9)' == item.text()
+        index = view.table.indexFromItem(item)
+        delegate = view.table.itemDelegateForColumn(4)
+        editor = delegate.createEditor(view.table, None, index)
+        delegate.setEditorData(editor, index)
+        assert editor.currentData() == 9
+        delegate.setModelData(editor, view.table.model(), index)
+        assert view.projects['A650'].values['F15.01'] == 9
+        editor.setCurrentIndex(editor.findData(2))
+        delegate.setModelData(editor, view.table.model(), index)
+        assert view.projects['A650'].values['F15.01'] == 2
+    finally:
+        view.close()
+
+
+def test_editable_filter_shows_only_supported_offline_entries(app):
+    view = CatalogView()
+    try:
+        view.editable_only.setChecked(True)
+        codes = {entry.code for entry in view.visible_entries}
+        assert {'F15.01', 'F13.01', 'F01.01', 'F03.00'} <= codes
+        assert 'F18.08' not in codes
+        assert all(view.table.item(i, 4).flags() & Qt.ItemFlag.ItemIsEditable
+                   for i in range(view.table.rowCount()))
+        view.model.setCurrentText('A650M')
+        view.search.setText('F18.08')
+        assert view.table.rowCount() == 0
+    finally:
+        view.close()

@@ -3,9 +3,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QPlainTextEdit, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget, QSplitter, QFrame, QPushButton,
-                               QFileDialog, QMessageBox)
+                               QFileDialog, QMessageBox, QCheckBox)
 from ..a650lib.catalog import load_catalog, search_catalog
-from ..a650lib.offline_project import OfflineProject, ENUMS, DECIMALS
+from ..a650lib.offline_project import OfflineProject, ENUMS, DECIMALS, UNITS
 from .project_delegate import ProjectDelegate
 
 
@@ -59,8 +59,10 @@ class CatalogView(QWidget):
             if label:
                 filters.addWidget(QLabel(label))
             filters.addWidget(widget)
+        self.editable_only = QCheckBox('Можно изменить офлайн')
+        filters.addWidget(self.editable_only)
         layout.addLayout(filters)
-        warning = QLabel('Проект редактируется офлайн. Доступны F15.01 и F13.01; запись в ПЧ из таблицы отключена.')
+        warning = QLabel('Офлайн-проект: доступные поля можно изменить. Запись в ПЧ из таблицы отключена.')
         warning.setWordWrap(True)
         warning.setObjectName("notice")
         layout.addWidget(warning)
@@ -102,6 +104,7 @@ class CatalogView(QWidget):
         self.model.currentTextChanged.connect(self._load)
         self.group.currentTextChanged.connect(self._render)
         self.search.textChanged.connect(self._render)
+        self.editable_only.toggled.connect(self._render)
         self.table.itemSelectionChanged.connect(self._show_detail)
         self._load(self.model.currentText())
 
@@ -180,6 +183,10 @@ class CatalogView(QWidget):
     def _render(self, *_):
         self._rendering = True
         self.visible_entries = search_catalog(self.entries, self.search.text(), self.group.currentText())
+        if self.editable_only.isChecked():
+            self.visible_entries = tuple(entry for entry in self.visible_entries
+                if (entry.code in ENUMS or entry.code in DECIMALS)
+                and not entry.duplicate and not entry.conflict)
         self.table.setRowCount(len(self.visible_entries))
         project = self.projects[self.model.currentText()]
         for row, entry in enumerate(self.visible_entries):
@@ -191,9 +198,10 @@ class CatalogView(QWidget):
             if value is None:
                 display = 'Выбрать…' if editable else 'Не определено'
             elif entry.code in ENUMS:
-                display = f'{value} — {ENUMS[entry.code][value]}'
+                label = ENUMS[entry.code].get(value)
+                display = f'{value} — {label}' if label is not None else f'Неизвестное значение ({value})'
             else:
-                display = f'{value.replace(".", ",")} %'
+                display = f'{value.replace(".", ",")} {UNITS[entry.code]}'
             other = self.comparison.values.get(entry.code) if self.comparison else None
             if other is None or value is None:
                 comparison = 'Не задано' if self.comparison else 'Не выбрано'
@@ -240,6 +248,10 @@ class CatalogView(QWidget):
             conflicts.append('Варианты приведены по PDF, стр. 133. Для варианта 8E1 текст EXE расходится с PDF; формат по умолчанию также требует проверки.')
         if entry.code == 'F13.01':
             conflicts.append('Офлайн-ввод 0,0–100,0 %, шаг 0,1; формат передачи в ПЧ не подтверждён.')
+        if entry.code in ENUMS and entry.code != 'F15.01':
+            conflicts.append('Варианты для офлайн-проекта сверены с руководством A650, издание 3, таблица 5.2. Применимость к конкретной модели и прошивке требует проверки.')
+        if entry.code in DECIMALS and entry.code != 'F13.01':
+            conflicts.append('Пределы офлайн-ввода взяты из руководства A650, издание 3, таблица 5.2. Масштаб передачи и условия записи не подтверждены.')
         self.detail.setPlainText('\n'.join([
             f'{self.model.currentText()} · {entry.code} — {entry.name}',
             f'Диапазон в EXE: {entry.minimum or "не указан"} … {entry.maximum or "не указан"}; по умолчанию: {entry.default or "не указано"}',

@@ -7,10 +7,33 @@ import os
 import tempfile
 
 
-# Panel semantics for the initial vertical slice; not Modbus write metadata.
-ENUMS = {'F15.01': {0: 'Нет чётности · 8N2', 1: 'Чётная · 8E1',
-                    2: 'Нечётная · 8O1', 3: 'Нет чётности · 8N1'}}
-DECIMALS = {'F13.01': (Decimal('0'), Decimal('100'), Decimal('0.1'))}
+# Display choices transcribed from A650 edition 3; offline semantics only.
+ENUMS = {
+    'F01.01': {0: 'Цифровая уставка', 1: 'Потенциометр пульта', 2: 'Аналоговый вход AI1',
+               3: 'Канал связи', 4: 'Ступенчатые скорости', 5: 'ПЛК', 6: 'Выход ПИД',
+               7: 'Импульсный вход DI7/HI', 8: 'Аналоговый вход AI2', 9: 'Аналоговый вход AI3'},
+    'F02.00': {0: 'Пульт управления', 1: 'Цифровые входы', 2: 'Канал связи'},
+    'F02.12': {0: 'Останов с торможением', 1: 'Останов выбегом'},
+    'F13.00': {0: 'Цифровая уставка F13.01', 1: 'Потенциометр пульта', 2: 'AI1',
+               3: 'Канал связи', 4: 'Ступенчатые скорости', 5: 'Импульсный вход DI7/HI',
+               6: 'AI2', 7: 'AI3'},
+    'F15.00': {0: '4800 бод', 1: '9600 бод', 2: '19200 бод', 3: '38400 бод',
+               4: '57600 бод', 5: '115200 бод'},
+    'F15.01': {0: 'Нет чётности · 8N2', 1: 'Чётная · 8E1',
+               2: 'Нечётная · 8O1', 3: 'Нет чётности · 8N1'},
+    'F15.05': {0: 'Ведомый', 1: 'Ведущий'},
+    'F15.06': {0: 'Заданная частота', 1: 'Текущая рабочая частота'},
+}
+DECIMALS = {
+    'F01.08': (Decimal('20'), Decimal('600'), Decimal('0.01')),
+    'F03.00': (Decimal('0'), Decimal('6000'), Decimal('0.1')),
+    'F03.01': (Decimal('0'), Decimal('6000'), Decimal('0.1')),
+    'F13.01': (Decimal('0'), Decimal('100'), Decimal('0.1')),
+    'F15.03': (Decimal('0'), Decimal('60'), Decimal('0.1')),
+    'F15.04': (Decimal('0'), Decimal('200'), Decimal('1')),
+}
+UNITS = {'F01.08': 'Гц', 'F03.00': 'с', 'F03.01': 'с', 'F13.01': '%',
+         'F15.03': 'с', 'F15.04': 'мс'}
 
 
 def validate(code, value):
@@ -23,7 +46,7 @@ def validate(code, value):
             n = Decimal(str(value).strip().replace(',', '.'))
             low, high, step = DECIMALS[code]
             if not n.is_finite() or n < low or n > high or n % step:
-                raise ValueError('Введите значение от 0,0 до 100,0 с шагом 0,1')
+                raise ValueError(f'Введите значение от {low} до {high} с шагом {step}')
             return str(n.quantize(step))
         except InvalidOperation as exc:
             raise ValueError('Введите корректное число') from exc
@@ -40,7 +63,15 @@ class OfflineProject:
             raise ValueError('Неизвестная модель')
         if not isinstance(self.values, dict):
             raise ValueError('Некорректные параметры проекта')
-        self.values = {code: validate(code, value) for code, value in self.values.items()}
+        # Preserve unknown enum codes from projects for inspection and round-trip;
+        # selecting a new value still goes through strict validation in set().
+        checked = {}
+        for code, value in self.values.items():
+            if code in ENUMS and type(value) is int and -(2**31) <= value < 2**31:
+                checked[code] = value
+            else:
+                checked[code] = validate(code, value)
+        self.values = checked
 
     def set(self, code, value):
         self.values[code] = validate(code, value)

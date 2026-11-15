@@ -1,7 +1,7 @@
 """Typed, offline-only editors. Enter commits locally, Escape cancels."""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyledItemDelegate
-from ..a650lib.offline_project import ENUMS, DECIMALS, validate
+from ..a650lib.offline_project import ENUMS, DECIMALS, UNITS, validate
 
 
 class ProjectDelegate(QStyledItemDelegate):
@@ -18,14 +18,19 @@ class ProjectDelegate(QStyledItemDelegate):
             return editor
         if code in DECIMALS:
             editor = QLineEdit(parent)
-            editor.setPlaceholderText('0,0 … 100,0 %')
+            low, high, step = DECIMALS[code]
+            editor.setPlaceholderText(f'{low} … {high} {UNITS[code]} (шаг {step})')
             return editor
         return None
 
     def setEditorData(self, editor, index):
         value = index.data(self.VALUE_ROLE)
         if isinstance(editor, QComboBox):
-            editor.setCurrentIndex(max(0, editor.findData(value)))
+            index = editor.findData(value)
+            if value is not None and index < 0:
+                editor.addItem(f'Неизвестное значение ({value})', value)
+                index = editor.count() - 1
+            editor.setCurrentIndex(max(0, index))
         else:
             editor.setText('' if value is None else str(value).replace('.', ','))
 
@@ -39,4 +44,4 @@ class ProjectDelegate(QStyledItemDelegate):
             return
         model.setData(index, value, self.VALUE_ROLE)
         model.setData(index, f'{value} — {ENUMS[code][value]}' if code in ENUMS
-                      else f'{value.replace(".", ",")} %', Qt.ItemDataRole.DisplayRole)
+                      else f'{value.replace(".", ",")} {UNITS[code]}', Qt.ItemDataRole.DisplayRole)
