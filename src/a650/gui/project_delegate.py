@@ -1,7 +1,7 @@
 """Typed, offline-only editors. Enter commits locally, Escape cancels."""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QComboBox, QLineEdit, QStyledItemDelegate
-from ..a650lib.offline_project import ENUMS, DECIMALS, UNITS, validate
+from ..a650lib.offline_project import validate
 
 
 class ProjectDelegate(QStyledItemDelegate):
@@ -10,16 +10,17 @@ class ProjectDelegate(QStyledItemDelegate):
 
     def createEditor(self, parent, option, index):
         code = index.data(self.CODE_ROLE)
-        if code in ENUMS:
+        profile = self.parent().editor_profile
+        if code in profile.enums:
             editor = QComboBox(parent)
             editor.addItem('Выберите значение…', None)
-            for value, label in ENUMS[code].items():
+            for value, label in profile.enums[code].items():
                 editor.addItem(f'{value} — {label}', value)
             return editor
-        if code in DECIMALS:
+        if code in profile.decimals:
             editor = QLineEdit(parent)
-            low, high, step = DECIMALS[code]
-            editor.setPlaceholderText(f'{low} … {high} {UNITS[code]} (шаг {step})')
+            low, high, step = profile.decimals[code]
+            editor.setPlaceholderText(f'{low} … {high} {profile.units[code]} (шаг {step})')
             return editor
         return None
 
@@ -36,9 +37,10 @@ class ProjectDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
         code = index.data(self.CODE_ROLE)
+        profile = self.parent().editor_profile
         value = editor.currentData() if isinstance(editor, QComboBox) else editor.text()
         try:
-            value = validate(code, value)
+            value = validate(code, value, profile.model)
         except ValueError as exc:
             self.parent().show_validation(str(exc))
             return
