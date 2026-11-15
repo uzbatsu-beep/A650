@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - codex/a650-interface-preview
+    tags:
+      - preview-*
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   preview:
@@ -49,3 +51,19 @@ jobs:
             dist/start-preview.cmd
           if-no-files-found: error
           retention-days: 14
+      - name: Package preview ZIP
+        if: startsWith(github.ref, 'refs/tags/preview-')
+        shell: pwsh
+        run: Compress-Archive -Path dist/a650.exe,dist/start-preview.cmd -DestinationPath a650-windows-preview.zip
+      - name: Publish preview release
+        if: startsWith(github.ref, 'refs/tags/preview-')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "ONI A650 — предварительная версия интерфейса"
+          prerelease: true
+          files: a650-windows-preview.zip
+          body: |
+            Предварительная версия для оценки интерфейса и симулятора.
+
+            Распакуйте ZIP и запустите `start-preview.cmd`. Каталог доступен для просмотра.
+            Совместимость с реальным приводом и USB–RS-485 ещё не проверена.

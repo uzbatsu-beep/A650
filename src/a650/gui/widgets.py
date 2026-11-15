@@ -16,11 +16,11 @@ from PySide6.QtWidgets import (
 
 from ..a650lib.register_map import RegisterMap
 
-ACCENT = "#2f81f7"          # GitHub-dark blue
-BG = "#1c2128"
-PANEL = "#22272e"
-FG = "#e6edf3"
-MUTED = "#8b949e"
+ACCENT = "#0a8d80"
+BG = "#f2f5f7"
+PANEL = "#ffffff"
+FG = "#182b3b"
+MUTED = "#657789"
 
 STATE_NAMES = {0: "Настройка параметров", 1: "Работа", 2: "Толчковый режим",
                3: "Обучение", 4: "Останов", 5: "Останов толчкового режима",
@@ -28,41 +28,39 @@ STATE_NAMES = {0: "Настройка параметров", 1: "Работа", 
 
 
 def style_app() -> str:
-    """Dark modern stylesheet applied to the whole QApplication."""
-    return f"""
-    QWidget {{ background: {BG}; color: {FG}; font-size: 14px; }}
-    QGroupBox {{ border: 1px solid #30363d; border-radius: 8px; margin-top: 14px;
-                 padding: 10px; font-weight: 600; }}
-    QGroupBox::title {{ subcontrol-origin: margin; left: 12px; padding: 0 6px;
-                        color: {MUTED}; }}
-    QPushButton {{ background: {PANEL}; border: 1px solid #30363d; border-radius: 6px;
-                   padding: 8px 14px; font-weight: 600; }}
-    QPushButton:hover {{ border-color: {ACCENT}; }}
-    QPushButton:disabled {{ color: {MUTED}; }}
-    QPushButton#primary {{ background: {ACCENT}; color: white; border: none; }}
-    QPushButton#primary:hover {{ background: #4a8ff8; }}
-    QPushButton#danger {{ background: #da3633; color: white; border: none; }}
-    QPushButton#danger:hover {{ background: #e5534b; }}
-    QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
-        background: {PANEL}; border: 1px solid #30363d; border-radius: 6px;
-        padding: 6px 8px; selection-background-color: {ACCENT}; }}
-    QComboBox::drop-down {{ border: none; width: 22px; }}
-    QComboBox QAbstractItemView {{ background: {PANEL}; border: 1px solid #30363d;
-        selection-background-color: {ACCENT}; }}
-    QPlainTextEdit, QListWidget, QTableWidget {{ background: {PANEL};
-        border: 1px solid #30363d; border-radius: 6px; }}
-    QTableWidget::item {{ padding: 4px; }}
-    QHeaderView::section {{ background: {BG}; color: {MUTED}; border: none;
-        padding: 6px; font-weight: 600; }}
-    QScrollBar:vertical {{ background: {BG}; width: 10px; }}
-    QScrollBar::handle:vertical {{ background: #30363d; border-radius: 5px; min-height: 24px; }}
-    QCheckBox {{ spacing: 8px; }}
-    QStatusBar {{ background: {PANEL}; color: {MUTED}; }}
-    QLabel#big {{ font-size: 34px; font-weight: 700; }}
-    QLabel#unit {{ color: {MUTED}; font-size: 15px; }}
-    QLabel#stateStopped {{ color: {MUTED}; font-weight: 700; }}
-    QLabel#stateRun {{ color: #3fb950; font-weight: 700; }}
-    QLabel#stateFault {{ color: #e5534b; font-weight: 700; }}
+    """Calm, high-contrast desktop theme for field use."""
+    return """
+    QWidget { background: #f2f5f7; color: #182b3b; font-family: 'Segoe UI'; font-size: 13px; }
+    QMainWindow, QTabWidget::pane { background: #f2f5f7; border: 0; }
+    QTabBar::tab { background: transparent; color: #64778a; padding: 14px 24px; font-weight: 600; border-bottom: 3px solid transparent; }
+    QTabBar::tab:selected { color: #087f75; border-bottom: 3px solid #0a8d80; }
+    QGroupBox { background: white; border: 1px solid #dce5ea; border-radius: 12px; margin-top: 16px; padding: 14px; font-weight: 600; }
+    QGroupBox::title { subcontrol-origin: margin; left: 16px; padding: 0 6px; color: #4f6475; }
+    QPushButton { background: white; border: 1px solid #c9d7dd; border-radius: 7px; padding: 9px 14px; font-weight: 600; }
+    QPushButton:hover { border-color: #0a8d80; color: #087f75; }
+    QPushButton:disabled { color: #9cacb6; background: #f4f6f7; }
+    QPushButton#primary { background: #087f75; color: white; border: 0; }
+    QPushButton#primary:hover { background: #066e66; }
+    QPushButton#danger { background: #b94040; color: white; border: 0; }
+    QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { background: white; border: 1px solid #cad8df; border-radius: 7px; padding: 8px 10px; selection-background-color: #bce8df; }
+    QComboBox::drop-down { border: 0; width: 24px; }
+    QComboBox QAbstractItemView { background: white; selection-background-color: #d9f1ec; selection-color: #123b36; }
+    QPlainTextEdit, QListWidget, QTableWidget { background: white; border: 1px solid #dce5ea; border-radius: 10px; selection-background-color: #ddf3ef; selection-color: #16413b; }
+    QTableWidget::item { padding: 8px; border-bottom: 1px solid #eef2f4; }
+    QTableWidget::item:selected { background: #ddf3ef; color: #16413b; }
+    QHeaderView::section { background: #f7f9fa; color: #6c7f8d; border: 0; border-bottom: 1px solid #dce5ea; padding: 10px; font-size: 11px; font-weight: 700; }
+    QScrollBar:vertical { background: transparent; width: 9px; }
+    QScrollBar::handle:vertical { background: #c3d0d6; border-radius: 4px; min-height: 24px; }
+    QCheckBox { spacing: 8px; }
+    QStatusBar { background: #e8eef1; color: #647788; }
+    QLabel#big { font-size: 34px; font-weight: 700; }
+    QLabel#unit, QLabel#muted { color: #728694; }
+    QLabel#pageTitle { font-size: 27px; font-weight: 700; color: #172e3e; }
+    QLabel#eyebrow { color: #07877a; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
+    QLabel#notice { background: #e3f3ef; color: #256759; border-radius: 8px; padding: 10px 14px; }
+    QLabel#stateStopped { color: #71838d; font-weight: 700; }
+    QLabel#stateRun { color: #087f75; font-weight: 700; }
+    QLabel#stateFault { color: #b94040; font-weight: 700; }
     """
 
 

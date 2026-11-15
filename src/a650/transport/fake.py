@@ -23,7 +23,10 @@ _SESSIONS: dict[str, dict[int, int]] = {}
 
 def _default_bank() -> dict[int, int]:
     # 0x2100 defaults to 0 ("parameter setting mode") per manual enum.
-    return {0x2000: 0x0000, 0x2001: 0x0000, 0x2100: 0x0000}
+    # Demonstration values, not a claim about firmware factory defaults.
+    return {0x2000: 0, 0x2001: 0, 0x2100: 0,
+            0x0101: 6, 0x0200: 1, 0x020C: 0, 0x0D00: 2,
+            0x0F00: 1, 0x0F01: 0, 0x0F05: 0, 0x0F06: 0}
 
 
 class FakeTransport:

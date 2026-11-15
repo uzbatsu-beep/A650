@@ -137,3 +137,9 @@ def test_connect_error_on_bad_port(ctrl):
     wait_until(lambda: bool(errs))
     assert any("connect failed" in e for e in errs)
     assert not ctrl.is_connected
+
+
+def test_catalog_read_rejects_non_simulated_connection(ctrl):
+    values, errors = [], []
+    ctrl.read_simulated_parameters(['F15.01'], values.append, errors.append)
+    assert errors and not values
