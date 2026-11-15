@@ -17,7 +17,6 @@ a = Analysis(
         # (__editable__ finder + .pth) PyInstaller's static analysis cannot see
         # src/ and silently drops every a650.* submodule.
         "a650",
-        "a650.__main__",
         "a650.cli",
         "a650.repl",
         "a650.client",

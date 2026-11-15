@@ -371,7 +371,8 @@ class CatalogView(QWidget):
             editable = entry.code in self.editor_profile.enums or entry.code in self.editor_profile.decimals
             value = project.values.get(entry.code)
             if value is None:
-                display = 'Выбрать…' if editable else 'Не определено'
+                display = ('Выбрать…' if entry.code in self.editor_profile.enums else
+                           'Ввести…' if entry.code in self.editor_profile.decimals else 'Не определено')
             elif entry.code in self.editor_profile.enums:
                 label = self.editor_profile.enums[entry.code].get(value)
                 display = f'{value} — {label}' if label is not None else f'Неизвестное значение ({value})'

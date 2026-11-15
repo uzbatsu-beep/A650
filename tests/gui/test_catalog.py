@@ -10,6 +10,21 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
+def test_main_window_starts_on_editable_parameters_and_identifies_build(app):
+    from a650 import __version__
+    from a650.gui.app import MainWindow
+    window = MainWindow()
+    try:
+        assert window.tabs.currentWidget() is window.catalog
+        assert window.catalog.editable_only.isChecked()
+        assert len(window.catalog.visible_entries) == 14
+        assert __version__ in window.windowTitle()
+        assert all(window.catalog.table.item(i, 4).flags() & Qt.ItemFlag.ItemIsEditable
+                   for i in range(window.catalog.table.rowCount()))
+    finally:
+        window.close()
+
+
 def test_model_search_duplicates_and_conflicting_addresses():
     basic, extended = load_catalog('A650'), load_catalog('A650M')
     assert len(search_catalog(basic, 'F13.01')) == 1

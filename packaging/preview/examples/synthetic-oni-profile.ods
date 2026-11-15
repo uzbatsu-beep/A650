@@ -1,0 +1,21 @@
+; SYNTHETIC EXAMPLE reconstructed from EXE, NOT a vendor export.
+; Offline UI evaluation only; NOT drive defaults or commissioning settings.
+[General]
+Model = ПЧ ONI A650
+
+[Parameter Set]
+F01.01 = 3
+F13.01 = 500
+F15.01 = 2
+F15.05 = 0
+F17.28 = 1
+F99.99 = 1
+
+[Parameter Read]
+F13.01 = 450
+F15.01 = 0
+F15.06 = 1
+
+[Check Parameter]
+F13.01 = 1
+F15.01 = 1

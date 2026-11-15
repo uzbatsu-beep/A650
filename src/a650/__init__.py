@@ -1,6 +1,3 @@
-"""a650 — ONI A650 frequency inverter Modbus RTU configurator (skeleton).
+"""ONI A650 configurator development preview; see docs/DEVELOPMENT_STATUS.md."""
 
-Status: protocol research stage. See docs/ and data/*.csv for knowledge state.
-"""
-
-__version__ = "0.1.0"
+__version__ = "0.2.0.dev1"

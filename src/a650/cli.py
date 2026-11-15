@@ -14,12 +14,11 @@ import sys
 from decimal import Decimal
 from pathlib import Path
 
+from . import __version__
 from .a650lib.register_map import RegisterMap
 from .a650lib.safety import SafetyGuard, WriteDenied
 from .client import A650Client, DriveError
 from .transport.fake import FakeTransport
-
-__version__ = "0.0.1"
 
 # Addresses we know are writable from the manual examples only.
 KNOWN_WRITABLE = {0x2000, 0x2001}
