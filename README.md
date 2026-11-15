@@ -27,6 +27,8 @@
 
 ## Документация
 
+- [Дизайн интерфейса и критерии альфы](docs/INTERFACE_DESIGN.md)
+
 - [Разбор архива A650.zip: полезные материалы и противоречия](docs/ARCHIVE_REVIEW.md)
 
 - [Формат OniDriveStudio .ods и офлайн-чтение профилей](docs/ODS_FORMAT.md)
