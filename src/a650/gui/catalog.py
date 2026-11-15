@@ -379,6 +379,7 @@ class CatalogView(QWidget):
         self.table.setColumnHidden(6, not self._simulated_connection and not self.observed)
         self.table.clearSelection()
         self.table.setCurrentCell(-1, -1)
+        self.result_count.setText(f'{len(self.visible_entries)} из {len(self.entries)} параметров')
         self.table.setRowCount(len(self.visible_entries))
         for row, entry in enumerate(self.visible_entries):
             status = 'Конфликт' if entry.conflict else 'Дубликат' if entry.duplicate else 'Не проверено на ПЧ'
