@@ -117,8 +117,8 @@ def test_partial_line_is_not_replayed(tmp_path):
 def test_status_client_does_not_issue_the_rejected_four_register_block():
     class RestrictiveBench(FakeTransport):
         def exchange(self, request, expected_len, timeout_s):
-            if (request[1] == 3 and request[2:4] == b"\\x21\\x00"
-                    and request[4:6] == b"\\x00\\x04"):
+            if (request[1] == 3 and request[2:4] == bytes((0x21, 0x00))
+                    and request[4:6] == bytes((0x00, 0x04))):
                 return build_exception(request[0], 3, 3)
             return super().exchange(request, expected_len, timeout_s)
 
