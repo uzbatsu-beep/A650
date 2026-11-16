@@ -1,0 +1,73 @@
+name: Bench discovery checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-discovery-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Qt runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1
+      - name: Install test dependencies
+        run: python -m pip install -e ".[dev,gui,serial]"
+      - name: Compile-check source
+        run: python -m compileall -q src/a650 tests
+      - name: Full test suite (no hardware access)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/ -q
+
+  windows-preview:
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build and test dependencies
+        run: python -m pip install -e ".[dev,build]"
+      - name: Run Windows test suite
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/ -q
+      - name: Build Windows executable
+        run: pyinstaller packaging/a650.spec --distpath dist --workpath build --noconfirm
+      - name: Verify frozen CLI and GUI
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          & dist/a650.exe --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & dist/a650.exe --simulate read 0x3000
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $process = Start-Process -FilePath dist/a650.exe -ArgumentList '--simulate','gui','--auto-quit','4000' -PassThru
+          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'GUI startup timed out' }
+          if ($process.ExitCode -ne 0) { throw "GUI exit code: $($process.ExitCode)" }
+      - name: Package review artifact (NOT a GitHub Release)
+        shell: pwsh
+        run: python packaging/package_preview.py --binary dist/a650.exe --commit "$env:GITHUB_SHA" --source-ref "$env:GITHUB_REF_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a650-windows-bench-diagnostic-review
+          path: |
+            dist/preview-release/*.zip
+            dist/preview-release/*.sha256
+          if-no-files-found: error
+          retention-days: 14

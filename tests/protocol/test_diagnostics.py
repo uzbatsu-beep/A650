@@ -29,5 +29,5 @@ def test_collect_uses_only_single_register_reads_and_keeps_errors():
     rows = list(collect(client, [("U00.00", 0x3000), ("U01.00", 0x3100)], delay_s=0))
     assert client.calls == [(0x3000, 1), (0x3100, 1)]
     assert rows[0]["raw"] == 123 and rows[0]["quality"] == "ok"
-    assert rows[1]["quality"] == "error"
+    assert rows[1]["quality"] == "timeout"
     assert "raw" not in rows[1]

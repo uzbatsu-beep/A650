@@ -267,12 +267,21 @@ class StatusCard(QGroupBox):
         if st is None:
             self.state_lbl.setText("OFFLINE")
             self.state_lbl.setObjectName("stateStopped")
+            self.fault_lbl.setText("—")
+            self.warn_lbl.setText("—")
+            self.bits_lbl.setText("—")
+            self.freq_lbl.setText("—")
+            self.gauge.set_value(0)
+            self.ts_lbl.setText("—")
             return
-        code = st.get("state", 0)
-        name = STATE_NAMES.get(code, f"CODE {code}")
-        if code in (1, 2):
-            name += " · назад" if st.get("status_bits", 0) & 2 else " · вперёд"
-        fault = st.get("fault_code", 0)
+        code = st.get("state")
+        bits = st.get("status_bits")
+        fault = st.get("fault_code")
+        warn = st.get("warning_code")
+        hz = st.get("output_hz")
+        name = "НЕИЗВЕСТНО" if code is None else STATE_NAMES.get(code, f"CODE {code}")
+        if code in (1, 2) and bits is not None:
+            name += " · назад" if bits & 2 else " · вперёд"
         if fault:
             name = f"FAULT Err{fault:02d}"
             self.state_lbl.setObjectName("stateFault")
@@ -281,18 +290,17 @@ class StatusCard(QGroupBox):
         else:
             self.state_lbl.setObjectName("stateStopped")
         self.state_lbl.setText(name)
-        self.fault_lbl.setText("none" if not fault else f"Err{fault:02d} (raw {fault})")
-        warn = st.get("warning_code", 0)
-        self.warn_lbl.setText("none" if not warn else f"Warn{warn:02d} (raw {warn})")
-        self.bits_lbl.setText(f"0x{st.get('status_bits', 0):04X}")
-        self.freq_lbl.setText(f"{st.get('output_hz', 0.0):.2f}")
-        self.gauge.set_value(st.get("output_hz", 0.0))
+        self.fault_lbl.setText("—" if fault is None else
+                               ("none" if fault == 0 else f"Err{fault:02d} (raw {fault})"))
+        self.warn_lbl.setText("—" if warn is None else
+                              ("none" if warn == 0 else f"Warn{warn:02d} (raw {warn})"))
+        self.bits_lbl.setText("—" if bits is None else f"0x{bits:04X}")
+        self.freq_lbl.setText("—" if hz is None else f"{hz:.2f}")
+        self.gauge.set_value(0 if hz is None else hz)
         from datetime import datetime
         self.ts_lbl.setText(datetime.now().strftime("%H:%M:%S"))
-        # re-polish objectName styling
-        for w in (self.state_lbl,):
-            w.style().unpolish(w)
-            w.style().polish(w)
+        self.state_lbl.style().unpolish(self.state_lbl)
+        self.state_lbl.style().polish(self.state_lbl)
 
 
 class _FreqGauge(QWidget):
