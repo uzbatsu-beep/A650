@@ -76,6 +76,7 @@ class DriveController(QObject):
         self.audit_path = default_audit_path()
         self._timers: dict[str, QTimer] = {}
         self._polls: dict[str, tuple] = {}
+        self._poll_inflight: set[str] = set()
         self._thread = QThread(self)
         self._thread.setObjectName("a650-bus")
         self._worker = _Worker(self._queue)
@@ -214,6 +215,7 @@ class DriveController(QObject):
         self._timers[poll_id] = t
 
     def stop_poll(self, poll_id: str) -> None:
+        self._poll_inflight.discard(poll_id)
         self._polls.pop(poll_id, None)
         t = self._timers.pop(poll_id, None)
         if t is not None:
@@ -221,10 +223,20 @@ class DriveController(QObject):
 
     def _fire_poll(self, poll_id: str) -> None:
         entry = self._polls.get(poll_id)
-        if entry is None or not self.is_connected:
+        if entry is None or not self.is_connected or poll_id in self._poll_inflight:
             return
         fn, callback = entry
-        self._post(fn, on_success=callback)
+        self._poll_inflight.add(poll_id)
+
+        def complete(result):
+            self._poll_inflight.discard(poll_id)
+            if poll_id in self._polls:
+                callback(result)
+
+        def failed(_message):
+            self._poll_inflight.discard(poll_id)
+
+        self._post(fn, on_success=complete, on_error=failed)
 
     # -- read-only diagnostic scan -------------------------------------------------
 
