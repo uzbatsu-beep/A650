@@ -33,7 +33,10 @@ a = Analysis(
         "serial",                  # pyserial (optional at runtime; drop for slim builds)
         # --- GUI (PySide6). Imported lazily by `a650 gui`; PyInstaller cannot
         # see these through the function-level import, so list them explicitly.
+        "a650.diagnostics",   # scanner imported lazily from GUI/CLI
+        "a650.a650lib.catalog",
         "a650.gui",
+        "a650.gui.catalog",
         "a650.gui.app",
         "a650.gui.controller",
         "a650.gui.widgets",
