@@ -6,6 +6,9 @@ from threading import Event
 import pytest
 
 from a650.diagnostics import collect, read_targets, run_scan
+from a650.client import A650Client
+from a650.modbus.rtu import build_exception
+from a650.transport.fake import FakeTransport
 
 
 class RecordingClient:
@@ -109,3 +112,24 @@ def test_partial_line_is_not_replayed(tmp_path):
         stream.write('{"type":"reading"')
     with pytest.raises(ValueError, match="incomplete"):
         run_scan(client, TARGETS, path, model="A650", delay_s=0.03, resume=True)
+
+
+def test_status_client_does_not_issue_the_rejected_four_register_block():
+    class RestrictiveBench(FakeTransport):
+        def exchange(self, request, expected_len, timeout_s):
+            if (request[1] == 3 and request[2:4] == b"\\x21\\x00"
+                    and request[4:6] == b"\\x00\\x04"):
+                return build_exception(request[0], 3, 3)
+            return super().exchange(request, expected_len, timeout_s)
+
+    transport = RestrictiveBench(slave=1, session="status-single-read")
+    transport.open()
+    try:
+        client = A650Client(transport, slave=1, retries=0)
+        status = client.status()
+        assert status["fault_code"] == 0 and status["warning_code"] == 0
+        assert all(frame[1] == 3 for frame in transport.log)
+        assert all(int.from_bytes(frame[4:6], "big") == 1
+                   for frame in transport.log)
+    finally:
+        transport.close()
