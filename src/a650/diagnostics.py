@@ -77,7 +77,7 @@ def collect(client: A650Client, targets, *, delay_s: float = 0.1,
     for code, address in targets:
         if stop_event is not None and stop_event.is_set():
             return
-        request = ReadRegistersRequest(slave=client.slave, address=address, count=1)
+        request = ReadRegistersRequest(slave=getattr(client, 'slave', 1), address=address, count=1)
         started = time.monotonic()
         row = {"type": "reading", "timestamp": datetime.now(timezone.utc).isoformat(),
                "code": code, "address": f"0x{address:04X}", "function": 3,
@@ -186,11 +186,7 @@ def run_scan(client: A650Client, targets, output: Path | str, *,
     csv_path = export_csv(path)
     n = len(existing)
     with path.open("r", encoding="utf-8") as stream:
-        for line in stream:
-            if json.loads(line).get("type") == "reading":
-                n += 1
-    # n is counted from the file; do not double-count the resumed prefix.
-    n -= len(existing)
+        n = sum(json.loads(line).get("type") == "reading" for line in stream)
     return {"completed": n == len(targets), "scanned": n, "total": len(targets),
             "jsonl": str(path), "csv": str(csv_path)}
 
