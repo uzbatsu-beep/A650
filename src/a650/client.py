@@ -140,9 +140,13 @@ class A650Client:
         return eng
 
     def status(self) -> dict:
-        # Status block is 4 registers: 0x2100 state, 0x2101 status bits,
-        # 0x2102 fault, 0x2103 warning (docs/REGISTERS.md).
-        state, bits, fault, warn = self.read_registers(0x2100, 4)
+        # Bench test 2026-11-16: this device returns exception 0x03 for
+        # FC03 Count=4 starting at 0x2100, but accepts each single register.
+        # Keep the high-level API compatible while avoiding block reads.
+        state = self.read_registers(0x2100, 1)[0]
+        bits = self.read_registers(0x2101, 1)[0]
+        fault = self.read_registers(0x2102, 1)[0]
+        warn = self.read_registers(0x2103, 1)[0]
         return {"state": state, "status_bits": bits,
                 "fault_code": fault, "warning_code": warn}
 
