@@ -101,15 +101,16 @@ class DriveController(QObject):
                 self._queue.get_nowait()
             except Empty:
                 break
-        if self.client is not None:
+        self._queue.put(None)      # poison pill ends the worker pump loop
+        self._thread.quit()
+        stopped = self._thread.wait(self._shutdown_wait_ms)
+        # Never close a serial transport concurrently with an in-flight read.
+        if stopped and self.client is not None:
             try:
                 self.client.transport.close()
             except Exception:
                 pass
             self.client = None
-        self._queue.put(None)      # poison pill ends the worker pump loop
-        self._thread.quit()
-        self._thread.wait(self._shutdown_wait_ms)
 
     @property
     def is_connected(self) -> bool:
