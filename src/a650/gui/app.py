@@ -10,12 +10,13 @@ Wires passive widgets (gui.widgets) to the thread-safe DriveController
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from decimal import Decimal
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QTabWidget, QVBoxLayout,
-    QWidget,
+    QApplication, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+    QProgressBar, QPushButton, QTabWidget, QVBoxLayout, QWidget,
 )
 from PySide6.QtCore import QTimer
 
@@ -43,6 +44,10 @@ class MainWindow(QMainWindow):
         self.resize(1180, 850)
         self.ctrl = controller or DriveController(self)
         self.map = _load_map()
+        self._last_poll_errors = {}
+        self._scan_count = 0
+        self._scan_ok = 0
+        self._scan_disconnect = False
 
         left = QVBoxLayout()
         self.conn_panel = ConnectionPanel()
@@ -57,6 +62,25 @@ class MainWindow(QMainWindow):
         self.inspector = RegisterInspector(self.map)
         self.log = EventLog()
         right.addWidget(self.status_card)
+        scan_panel = QGroupBox("Диагностика карты регистров · только чтение")
+        scan_layout = QVBoxLayout(scan_panel)
+        scan_buttons = QHBoxLayout()
+        self.scan_start = QPushButton("Сканировать каталог…")
+        self.scan_resume = QPushButton("Продолжить скан…")
+        self.scan_stop = QPushButton("Остановить")
+        self.scan_start.setEnabled(False)
+        self.scan_resume.setEnabled(False)
+        self.scan_stop.setEnabled(False)
+        for button in (self.scan_start, self.scan_resume, self.scan_stop):
+            scan_buttons.addWidget(button)
+        scan_layout.addLayout(scan_buttons)
+        self.scan_progress = QProgressBar()
+        self.scan_progress.setRange(0, 100)
+        self.scan_progress.setValue(0)
+        self.scan_status = QLabel("FC03 / Count=1 · JSONL + CSV · без записи в ПЧ")
+        scan_layout.addWidget(self.scan_progress)
+        scan_layout.addWidget(self.scan_status)
+        right.addWidget(scan_panel)
         right.addWidget(self.inspector, stretch=1)
         right.addWidget(self.log, stretch=1)
 
@@ -98,6 +122,10 @@ class MainWindow(QMainWindow):
         self.control.setFreqRequested.connect(self._on_setfreq)
         self.inspector.readRequested.connect(self._on_read)
         self.catalog.readRequested.connect(self._read_catalog)
+        self.scan_start.clicked.connect(lambda: self._start_scan(False))
+        self.scan_resume.clicked.connect(lambda: self._start_scan(True))
+        self.scan_stop.clicked.connect(self.ctrl.stop_scan)
+        self.ctrl.scanProgress.connect(self._on_scan_row)
 
     # -- connection --------------------------------------------------------------
 
@@ -121,38 +149,143 @@ class MainWindow(QMainWindow):
         self.log.append(f"Подключено: {desc}"
                        + (" [запись разрешена]" if self.ctrl.allow_write else " [только чтение]"))
         self.control.set_enabled(self.ctrl.allow_write)
+        self._scan_disconnect = False
+        self.scan_start.setEnabled(not self.ctrl.allow_write)
+        self.scan_resume.setEnabled(not self.ctrl.allow_write)
         # live polling: status block + output frequency every 500 ms
         self.ctrl.start_poll("status", 500, self._poll_status, self._show_status)
 
     def _poll_status(self):
-        st = self.ctrl.client.status()
-        st["output_hz"] = float(self.ctrl.client.output_frequency_hz())
+        """Read each register independently: a rejected block must not blank status."""
+        client = self.ctrl.client
+        st, errors = {}, {}
+        for name, address in (("state", 0x2100), ("status_bits", 0x2101),
+                              ("fault_code", 0x2102), ("warning_code", 0x2103)):
+            try:
+                st[name] = client.read_registers(address, 1)[0]
+            except Exception as exc:
+                st[name] = None
+                errors[name] = str(exc)
+        try:
+            st["output_hz"] = float(client.output_frequency_hz())
+        except Exception as exc:
+            st["output_hz"] = None
+            errors["output_hz"] = str(exc)
+        st["errors"] = errors
         return st
 
     def _show_status(self, st: dict) -> None:
         self.status_card.show_state(st)
-        eng = f"{st['output_hz']:.2f} Hz"
-        rows = {
-            0x2100: (st["state"], str(st["state"])),
-            0x2101: (st["status_bits"], f"0x{st['status_bits']:04X}"),
-            0x2102: (st["fault_code"],
-                     "none" if not st["fault_code"] else f"Err{st['fault_code']:02d}"),
-            0x2103: (st["warning_code"],
-                     "none" if not st["warning_code"] else f"Warn{st['warning_code']:02d}"),
-            0x3000: (int(round(st["output_hz"] * 100)), eng),
-        }
+        errors = st.get("errors", {})
+        if errors != self._last_poll_errors:
+            for name, message in errors.items():
+                if self._last_poll_errors.get(name) != message:
+                    self.log.append(f"READ {name}: {message}")
+            for name in set(self._last_poll_errors) - set(errors):
+                self.log.append(f"READ {name}: восстановлено")
+            self._last_poll_errors = errors.copy()
+        rows = {}
+        for address, name in ((0x2100, "state"), (0x2101, "status_bits"),
+                              (0x2102, "fault_code"), (0x2103, "warning_code")):
+            value = st.get(name)
+            if value is not None:
+                rows[address] = (value, f"0x{value:04X}" if address == 0x2101 else str(value))
+        if st.get("output_hz") is not None:
+            hz = st["output_hz"]
+            rows[0x3000] = (int(round(hz * 100)), f"{hz:.2f} Hz")
         self.inspector.update_values(rows)
 
     def _on_disconnect(self) -> None:
+        self._scan_disconnect = True
         self.ctrl.disconnect_drive()
 
     def _on_disconnected(self) -> None:
         self.catalog.set_connection(False)
         self.conn_panel.set_connected(False)
         self.control.set_enabled(False)
+        self.scan_start.setEnabled(False)
+        self.scan_resume.setEnabled(False)
+        self.scan_stop.setEnabled(False)
         self.status_card.show_state(None)
         self.lbl_bus.setText("Нет подключения")
         self.log.append("Отключено")
+
+    # -- bench discovery ---------------------------------------------------------------
+
+    def _start_scan(self, resume: bool) -> None:
+        if not self.ctrl.is_connected or self.ctrl.scanning or self.ctrl.allow_write:
+            return
+        model = self.catalog.model.currentText()
+        from ..diagnostics import read_targets
+        count = len(read_targets(model))
+        title = "Продолжить диагностику" if resume else "Сохранить отчёт диагностики"
+        if resume:
+            path, _ = QFileDialog.getOpenFileName(self, title, "", "JSONL (*.jsonl)")
+        else:
+            filename = f"a650-{model.lower()}-{datetime.now():%Y%m%d-%H%M%S}.jsonl"
+            path, _ = QFileDialog.getSaveFileName(self, title, filename, "JSONL (*.jsonl)")
+        if not path:
+            return
+        if not path.lower().endswith(".jsonl"):
+            path += ".jsonl"
+        if not resume:
+            answer = QMessageBox.question(
+                self, "Подтверждение безопасного сканирования",
+                f"Модель: {model}. План: {count} одиночных чтений FC03.\\n"
+                "Обычный мониторинг будет приостановлен.\\n"
+                "Запись и команды управления ПЧ не выполняются.\\n"
+                "На время проверки оставьте ПЧ в безопасном состоянии. Начать?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        self.ctrl.stop_poll("status")
+        self._scan_disconnect = False
+        self._scan_count = 0
+        self._scan_ok = 0
+        self.scan_progress.setRange(0, count)
+        self.scan_progress.setValue(0)
+        self.scan_start.setEnabled(False)
+        self.scan_resume.setEnabled(False)
+        self.scan_stop.setEnabled(True)
+        self.inspector.setEnabled(False)
+        self.scan_status.setText(f"Диагностика {model}: 0 / {count} · FC03 x1")
+        try:
+            self.ctrl.start_scan(model, path, resume=resume,
+                                 on_done=self._scan_finished, on_error=self._scan_failed)
+        except Exception as exc:
+            self._scan_failed(str(exc))
+
+    def _on_scan_row(self, row: dict) -> None:
+        self._scan_count += 1
+        if row.get("quality") == "ok":
+            self._scan_ok += 1
+        self.scan_progress.setValue(self._scan_count)
+        self.scan_status.setText(
+            f'Проверено новых: {self._scan_count}, успешно: {self._scan_ok}, '
+            f'последний: {row["address"]} ({row["quality"]})')
+
+    def _restore_after_scan(self) -> None:
+        self.scan_stop.setEnabled(False)
+        self.inspector.setEnabled(True)
+        allowed = self.ctrl.is_connected and not self.ctrl.allow_write and not self._scan_disconnect
+        self.scan_start.setEnabled(allowed)
+        self.scan_resume.setEnabled(allowed)
+        if self.ctrl.is_connected and not self._scan_disconnect:
+            self.ctrl.start_poll("status", 500, self._poll_status, self._show_status)
+
+    def _scan_finished(self, report: dict) -> None:
+        self.scan_progress.setValue(report["scanned"])
+        state = "Завершено" if report["completed"] else "Остановлено"
+        self.scan_status.setText(f'{state}: {report["scanned"]}/{report["total"]} · {report["jsonl"]}')
+        self.log.append(f'{state}: сканирование {report["scanned"]}/{report["total"]}; '
+                        f'JSONL {report["jsonl"]}; CSV {report["csv"]}')
+        self._restore_after_scan()
+
+    def _scan_failed(self, message: str) -> None:
+        self.scan_status.setText("Ошибка диагностики: " + message)
+        self.log.append("SCAN ERROR: " + message)
+        self._restore_after_scan()
 
     # -- safety gate -----------------------------------------------------------------
 
