@@ -11,6 +11,7 @@ from __future__ import annotations
 import itertools
 import traceback
 from queue import Empty, Queue
+from threading import Event
 from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
@@ -57,6 +58,7 @@ class DriveController(QObject):
     connectionFailed = Signal(str)
     disconnected = Signal()
     error = Signal(str)
+    scanProgress = Signal(object)  # each persisted JSONL record
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -67,6 +69,8 @@ class DriveController(QObject):
         self.allow_write = False
         self.simulate = False
         self.connecting = False
+        self._scan_stop: Event | None = None
+        self._scan_running = False
         self._closing = False
         self._shutdown_wait_ms = 3000
         self.audit_path = default_audit_path()
@@ -87,6 +91,7 @@ class DriveController(QObject):
 
     def shutdown(self) -> None:
         self._closing = True
+        self.stop_scan()
         for pid in list(self._timers):
             self.stop_poll(pid)
         # Drop queued work; allow only the in-flight exchange to finish.
@@ -173,6 +178,7 @@ class DriveController(QObject):
                    on_success=connected, on_error=failed)
 
     def disconnect_drive(self) -> None:
+        self.stop_scan()
         for pid in list(self._timers):
             self.stop_poll(pid)
 
@@ -219,6 +225,54 @@ class DriveController(QObject):
             return
         fn, callback = entry
         self._post(fn, on_success=callback)
+
+    # -- read-only diagnostic scan -------------------------------------------------
+
+    @property
+    def scanning(self) -> bool:
+        return self._scan_running
+
+    def start_scan(self, model: str, output, *, resume: bool = False,
+                   on_done=None, on_error=None) -> None:
+        """One queued worker job owns the bus for the entire scan.
+
+        Caller MUST stop the status poll first. No writes are issued.
+        """
+        if self._closing or not self.is_connected or self._scan_running:
+            raise RuntimeError("scan requires an idle, connected drive")
+        if self.allow_write:
+            raise RuntimeError("reconnect in read-only mode before scanning")
+        from ..diagnostics import read_targets, run_scan
+        targets = read_targets(model)
+        client = self.client
+        stop = Event()
+        self._scan_stop = stop
+        self._scan_running = True
+
+        def worker():
+            if self._closing or self.client is not client:
+                raise RuntimeError("device connection changed")
+            return run_scan(client, targets, output, model=model, stop_event=stop,
+                            resume=resume, on_row=self.scanProgress.emit)
+
+        def done(report):
+            self._scan_running = False
+            self._scan_stop = None
+            if on_done is not None:
+                on_done(report)
+
+        def failed(message):
+            self._scan_running = False
+            self._scan_stop = None
+            if on_error is not None:
+                on_error(message)
+
+        self._post(worker, on_success=done, on_error=failed)
+
+    def stop_scan(self) -> None:
+        """Cancellation takes effect between registers, not mid-frame."""
+        if self._scan_stop is not None:
+            self._scan_stop.set()
 
     # -- high-level verbs --------------------------------------------------------------
 
