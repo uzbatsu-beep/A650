@@ -36,7 +36,7 @@ def test_monitor_keeps_good_registers_when_one_fails(qapp):
             assert count == 1
             if address == 0x2100:
                 raise RuntimeError("Modbus exception 0x03")
-            return ({0x2101: 4, 0x2102: 0, 0x2103: 0})[address]
+            return (({0x2101: 4, 0x2102: 0, 0x2103: 0})[address],)
 
         def output_frequency_hz(self):
             return Decimal("12.34")
