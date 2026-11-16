@@ -231,9 +231,9 @@ class MainWindow(QMainWindow):
         if not resume:
             answer = QMessageBox.question(
                 self, "Подтверждение безопасного сканирования",
-                f"Модель: {model}. План: {count} одиночных чтений FC03.\\n"
-                "Обычный мониторинг будет приостановлен.\\n"
-                "Запись и команды управления ПЧ не выполняются.\\n"
+                f"Модель: {model}. План: {count} одиночных чтений FC03.\n"
+                "Обычный мониторинг будет приостановлен.\n"
+                "Запись и команды управления ПЧ не выполняются.\n"
                 "На время проверки оставьте ПЧ в безопасном состоянии. Начать?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No)
