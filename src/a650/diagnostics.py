@@ -30,8 +30,9 @@ def read_targets(model: str) -> list[tuple[str, int]]:
 
     Selection is NOT evidence that an address is supported by the device.
     """
-    targets = [("state", 0x2100), ("status_bits", 0x2101),
-               ("fault_code", 0x2102), ("warning_code", 0x2103)]
+    targets = [("setpoint_readback", 0x2001), ("state", 0x2100),
+               ("status_bits", 0x2101), ("fault_code", 0x2102),
+               ("warning_code", 0x2103)]
     seen = {address for _, address in targets}
     for entry in load_catalog(model):
         if (entry.ram is None or entry.duplicate or entry.conflict
